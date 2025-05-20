@@ -64,7 +64,8 @@ public class AuthenticationController {
         cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(60 * 60);
-        response.addCookie(cookie);
+        response.setHeader("Set-Cookie",
+            String.format("jwtToken=%s; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=%d", jwtToken, 60 * 60));
 
         LoginResponse loginResponse = new LoginResponse().setToken(jwtToken).setExpiresIn(jwtService.getExpirationTime());
         return ResponseEntity.ok(loginResponse);

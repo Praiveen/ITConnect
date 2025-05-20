@@ -58,7 +58,9 @@ class AuthService {
         throw new Error(errorData.message || "Ошибка при регистрации");
       }
 
-      return await response.json();
+      const data = await response.json();
+
+      return data;
     } catch (error) {
       console.error("Ошибка при регистрации:", error);
       throw error;
