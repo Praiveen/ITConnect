@@ -1,3 +1,14 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function getApiUrl(path) {
+  // path должен начинаться с /
+  if (API_BASE_URL) {
+    return API_BASE_URL + path;
+  }
+  // Если переменная не задана (локальная разработка) — используем прокси
+  return '/api' + path;
+}
+
 class AuthService {
   constructor() {
     this.userKey = "auth_user";
@@ -6,7 +17,7 @@ class AuthService {
 
   async login(email, password) {
     try {
-      const response = await fetch(`/api/auth/login`, {
+      const response = await fetch(getApiUrl('/auth/login'), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -20,10 +31,7 @@ class AuthService {
         throw new Error(errorData.message || "Ошибка при входе в систему");
       }
 
-      const data = await response.json();
-
       sessionStorage.setItem(this.isAuthenticatedKey, "true");
-
       return await this.refreshUserData();
     } catch (error) {
       console.error("Ошибка при входе:", error);
@@ -33,7 +41,7 @@ class AuthService {
 
   async register(firstName, email, password) {
     try {
-      const response = await fetch(`/api/auth/signup`, {
+      const response = await fetch(getApiUrl('/auth/signup'), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -50,9 +58,7 @@ class AuthService {
         throw new Error(errorData.message || "Ошибка при регистрации");
       }
 
-      const data = await response.json();
-
-      return data;
+      return await response.json();
     } catch (error) {
       console.error("Ошибка при регистрации:", error);
       throw error;
@@ -61,7 +67,7 @@ class AuthService {
 
   async logout() {
     try {
-      const response = await fetch(`/api/auth/logout`, {
+      const response = await fetch(getApiUrl('/auth/logout'), {
         method: "GET",
         credentials: "include",
       });
@@ -100,7 +106,7 @@ class AuthService {
 
   async refreshUserData() {
     try {
-      const response = await fetch(`/api/user/profile`, {
+      const response = await fetch(getApiUrl('/user/profile'), {
         method: "GET",
         credentials: "include",
       });
@@ -121,7 +127,6 @@ class AuthService {
       }
 
       localStorage.setItem(this.userKey, JSON.stringify(userData));
-
       sessionStorage.setItem(this.isAuthenticatedKey, "true");
 
       return userData;
@@ -133,7 +138,7 @@ class AuthService {
 
   async updateProfile(profileData) {
     try {
-      const response = await fetch("/api/user/profile", {
+      const response = await fetch(getApiUrl('/user/profile'), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -168,7 +173,6 @@ class AuthService {
 
   getUserId() {
     const user = this.getUser();
-
     return user ? user.id : null;
   }
 }
