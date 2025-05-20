@@ -5,8 +5,8 @@ export default defineConfig({
     proxy: {
       '/api': {
         // target: 'http://localhost:8080',
-        target: 'http://itconnect.onrender.com',
-        // changeOrigin: true,
+        target: 'https://itconnect.onrender.com',
+        changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },

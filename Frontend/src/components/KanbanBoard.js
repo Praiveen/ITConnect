@@ -30,7 +30,7 @@ function getChecklistStats(task) {
 let mentionsDropdown = null;
 let currentMentionTextarea = null;
 let mentionQuery = "";
-let activeMentionIndex = -1;
+let activeMentionIndex = -1; 
 let mentionStartIndex = -1;
 
 async function getMentionableUsers(query) {
@@ -59,18 +59,18 @@ async function getMentionableUsers(query) {
         const workspace = await workspaceService.getWorkspace(
           currentBoardData.workspaceId
         );
-
+        
         if (workspace && workspace.members) {
           resolvedBoardMembers = workspace.members.map((member) => ({
-            id: String(member.id),
+            id: String(member.id), 
             username: member.fullName
               ? member.fullName.replace(/\s+/g, "_").toLowerCase()
               : `user_${member.id}`,
             fullName: member.fullName || `User ${member.id}`,
           }));
-
-          workspaceMembersCache = resolvedBoardMembers;
-          currentWorkspaceIdForCache = currentBoardData.workspaceId;
+          
+          workspaceMembersCache = resolvedBoardMembers; 
+          currentWorkspaceIdForCache = currentBoardData.workspaceId; 
           console.log(
             "Mentions: Fetched and mapped workspace members:",
             resolvedBoardMembers
@@ -79,7 +79,7 @@ async function getMentionableUsers(query) {
           console.warn(
             `Mentions: No members found for workspace ${currentBoardData.workspaceId} or workspace data is missing.`
           );
-          workspaceMembersCache = [];
+          workspaceMembersCache = []; 
           currentWorkspaceIdForCache = currentBoardData.workspaceId;
           resolvedBoardMembers = [];
         }
@@ -106,7 +106,7 @@ async function getMentionableUsers(query) {
       (user) =>
         (user.username &&
           user.username.toLowerCase().includes(lowerCaseQuery)) ||
-        (user.fullName && user.fullName.toLowerCase().includes(lowerCaseQuery))
+    (user.fullName && user.fullName.toLowerCase().includes(lowerCaseQuery))
     )
     .slice(0, 5);
 }
@@ -128,7 +128,7 @@ async function showMentionsDropdown(query, textarea) {
     mentionsDropdown.innerHTML = users
       .map(
         (user, index) =>
-          `<div class="mention-item" data-index="${index}" data-username="${user.username}" data-fullname="${user.fullName}">
+      `<div class="mention-item" data-index="${index}" data-username="${user.username}" data-fullname="${user.fullName}">
          <span class="mention-item-fullname">${user.fullName}</span>
          <span class="mention-item-username">(@${user.username})</span>
        </div>`
@@ -171,10 +171,10 @@ function insertMention(username, textarea) {
   const before = text.substring(0, mentionStartIndex);
   const after = text.substring(textarea.selectionStart);
 
-  textarea.value = before + `@${username} ` + after;
-  textarea.focus();
+      textarea.value = before + `@${username} ` + after;
+      textarea.focus();
   const cursorPos = mentionStartIndex + username.length + 2;
-  textarea.setSelectionRange(cursorPos, cursorPos);
+      textarea.setSelectionRange(cursorPos, cursorPos);
 
   hideMentionsDropdown();
 }
@@ -199,7 +199,7 @@ function handleMentionTextareaInput(event) {
       }
     }
     if (/\s/.test(text[i])) {
-      break;
+        break;
     }
   }
   console.log(`Mentions: Calculated atIndex: ${atIndex}`);
@@ -209,9 +209,9 @@ function handleMentionTextareaInput(event) {
     console.log(`Mentions: Calculated queryPart: "${queryPart}"`);
 
     if (queryPart.includes(" ")) {
-      console.log("Mentions: queryPart contains space. Hiding dropdown.");
-      hideMentionsDropdown();
-      return;
+        console.log("Mentions: queryPart contains space. Hiding dropdown.");
+        hideMentionsDropdown();
+        return;
     }
     mentionQuery = queryPart;
     mentionStartIndex = atIndex;
@@ -285,17 +285,17 @@ document.addEventListener("click", function (event) {
   if (mentionsDropdown && mentionsDropdown.style.display === "block") {
     const isClickInsideTextarea =
       currentMentionTextarea && currentMentionTextarea.contains(event.target);
-    const isClickInsideDropdown = mentionsDropdown.contains(event.target);
-    if (!isClickInsideTextarea && !isClickInsideDropdown) {
-      hideMentionsDropdown();
+        const isClickInsideDropdown = mentionsDropdown.contains(event.target);
+        if (!isClickInsideTextarea && !isClickInsideDropdown) {
+            hideMentionsDropdown();
+        }
     }
-  }
 });
 
 function formatTextWithMentions(text) {
   if (!text) return "";
 
-  const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
+  const mentionRegex = /@([\p{L}\p{N}_]+)/gu; 
   return text.replace(mentionRegex, '<span class="mention-tag">@$1</span>');
 }
 
@@ -310,7 +310,7 @@ function getCardUserTaskStatus(task, currentUserIdString) {
   }
 
   let isUserAssignedToAnyItem = false;
-  let allUserAssignedItemsCompleted = true;
+  let allUserAssignedItemsCompleted = true; 
 
   for (const checklist of task.checklists) {
     for (const item of checklist.items) {
@@ -322,7 +322,7 @@ function getCardUserTaskStatus(task, currentUserIdString) {
       ) {
         isUserAssignedToAnyItem = true;
         if (!item.completed) {
-          allUserAssignedItemsCompleted = false;
+          allUserAssignedItemsCompleted = false; 
         }
       }
     }
@@ -339,20 +339,20 @@ function getCardUserTaskStatus(task, currentUserIdString) {
 }
 
 function updateUserCardHighlight(taskId) {
-  const currentUser = authService.getUser();
-  const currentUserIdString = currentUser ? String(currentUser.id) : null;
+    const currentUser = authService.getUser();
+    const currentUserIdString = currentUser ? String(currentUser.id) : null;
 
   if (!currentUserIdString) return;
 
   const cardElement = document.querySelector(
     `.kanban-card[data-task-id="${taskId}"]`
   );
-  if (!cardElement) return;
+    if (!cardElement) return;
 
-  const boardData = JSON.parse(currentBoardData.boardData);
-  const task = findTaskById(boardData, taskId);
+    const boardData = JSON.parse(currentBoardData.boardData);
+    const task = findTaskById(boardData, taskId);
 
-  if (!task) return;
+    if (!task) return;
 
   const { isAssigned, allUserTasksCompleted } = getCardUserTaskStatus(
     task,
@@ -365,14 +365,14 @@ function updateUserCardHighlight(taskId) {
   );
   cardElement.removeAttribute("title");
 
-  if (isAssigned) {
-    if (allUserTasksCompleted) {
+    if (isAssigned) {
+        if (allUserTasksCompleted) {
       cardElement.classList.add("user-assigned-completed");
       cardElement.setAttribute(
         "title",
         "Все ваши задачи в этой карточке выполнены."
       );
-    } else {
+        } else {
       cardElement.classList.add("user-assigned-pending");
       cardElement.setAttribute(
         "title",
@@ -388,7 +388,7 @@ export async function renderKanbanBoard(
   userRole = null
 ) {
   let board = preloadedBoardData;
-
+  
   const currentUser = authService.getUser();
   const currentUserIdString = currentUser ? String(currentUser.id) : null;
 
@@ -406,7 +406,7 @@ export async function renderKanbanBoard(
       preloadedBoardData.id
     );
   }
-
+  
   const isViewOnly = userRole === "VIEWER";
   console.log("Режим только для просмотра:", isViewOnly);
 
@@ -419,7 +419,7 @@ export async function renderKanbanBoard(
         board = cachedBoard;
       }
     }
-
+    
     if (!board) {
       const localStorageCache = JSON.parse(
         localStorage.getItem("kanban_boards_cache") || "[]"
@@ -430,13 +430,13 @@ export async function renderKanbanBoard(
         board = cachedBoard;
       }
     }
-
+    
     if (!board || !board._hasUnsavedChanges) {
       try {
         console.log(`Загрузка данных доски с ID ${boardId} с сервера...`);
 
         const serverBoard = await kanbanService.getBoard(boardId);
-
+        
         if (board && board._hasUnsavedChanges) {
           console.log(
             "Обнаружены несохраненные изменения, используем кэшированную версию"
@@ -444,7 +444,7 @@ export async function renderKanbanBoard(
         } else {
           board = serverBoard;
           console.log("Используем данные с сервера");
-
+          
           const boardsCache = getBoardsCache();
           if (boardsCache) {
             const boardIndex = boardsCache.findIndex((b) => b.id == boardId);
@@ -476,7 +476,7 @@ export async function renderKanbanBoard(
         }
       } catch (error) {
         console.error(`Ошибка при загрузке доски с ID ${boardId}:`, error);
-
+        
         if (board) {
           console.log("Используем кэшированные данные из-за ошибки сервера");
         } else {
@@ -500,7 +500,7 @@ export async function renderKanbanBoard(
   } else {
     console.log(`Используем предзагруженные данные для доски с ID ${boardId}`);
   }
-
+  
   if (!board) {
     return `
       <div class="board-container">
@@ -511,10 +511,10 @@ export async function renderKanbanBoard(
       </div>
     `;
   }
-
+  
   if (board._hasUnsavedChanges) {
     boardChanged = true;
-
+    
     setTimeout(() => {
       const saveStatus = document.getElementById("saveStatus");
       if (saveStatus) {
@@ -525,9 +525,9 @@ export async function renderKanbanBoard(
   } else {
     boardChanged = false;
   }
-
+  
   currentBoardData = board;
-
+  
   let boardColumnsData = [];
   try {
     const parsedData = JSON.parse(board.boardData);
@@ -536,12 +536,12 @@ export async function renderKanbanBoard(
     console.error("Ошибка при парсинге данных доски:", error);
     boardColumnsData = [];
   }
-
+  
   const columnsHtml = boardColumnsData
     .map((column, index) => {
       const cardsHtml = column.tasks
         .map((task) => {
-          const commentsCount = task.comments ? task.comments.length : 0;
+      const commentsCount = task.comments ? task.comments.length : 0;
           const hasDescription =
             task.description && task.description.trim() !== "";
           const isCompleted = task.completed ? "completed" : "";
@@ -552,22 +552,22 @@ export async function renderKanbanBoard(
 
           let userHighlightClass = "";
           let userTaskStatusTitle = "";
-          if (currentUserIdString) {
+      if (currentUserIdString) {
             const userTaskStatus = getCardUserTaskStatus(
               task,
               currentUserIdString
             );
-            if (userTaskStatus.isAssigned) {
+        if (userTaskStatus.isAssigned) {
               userHighlightClass = userTaskStatus.allUserTasksCompleted
                 ? "user-assigned-completed"
                 : "user-assigned-pending";
               userTaskStatusTitle = userTaskStatus.allUserTasksCompleted
                 ? "Все ваши задачи в этой карточке выполнены."
                 : "За вами закреплены невыполненные задачи в этой карточке.";
-            }
-          }
+        }
+      }
 
-          return `
+      return `
       <div class="kanban-card ${isCompleted} ${userHighlightClass}" draggable="${!isViewOnly}" data-task-id="${
             task.id
           }" ${userTaskStatusTitle ? `title="${userTaskStatusTitle}"` : ""}>
@@ -606,8 +606,8 @@ export async function renderKanbanBoard(
     `;
         })
         .join("");
-
-      return `
+    
+    return `
       <div class="kanban-column" data-column-id="${column.id}">
         <div class="column-header">
           <div class="column-title-container">
@@ -646,7 +646,7 @@ export async function renderKanbanBoard(
     `;
     })
     .join("");
-
+  
   return `
     <div class="board-container">
       <div class="board-header">
@@ -656,8 +656,7 @@ export async function renderKanbanBoard(
           ${
             !isViewOnly
               ? `
-          <button class="btn-secondary" id="editBoardButton">Редактировать</button>
-          <button class="btn-danger" id="deleteBoardButton">Удалить</button>
+          <button class="btn-secondary" id="editBoardButton">Архив карточек</button>
           `
               : ""
           }
@@ -704,28 +703,28 @@ export function setupBoardEventListeners(
     }
     return;
   }
-
+  
   const editBoardButton = document.getElementById("editBoardButton");
   if (editBoardButton) {
     editBoardButton.addEventListener("click", () => {
       editBoard(boardId);
     });
   }
-
+  
   const deleteBoardButton = document.getElementById("deleteBoardButton");
   if (deleteBoardButton) {
     deleteBoardButton.addEventListener("click", () => {
       deleteBoard(boardId, onBoardDeleted);
     });
   }
-
+  
   const addColumnBtn = document.getElementById("addColumnBtn");
   if (addColumnBtn) {
     addColumnBtn.addEventListener("click", () => {
       addNewColumn();
     });
   }
-
+  
   const addCardBtns = document.querySelectorAll(".add-card-btn");
   addCardBtns.forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -733,7 +732,7 @@ export function setupBoardEventListeners(
       addNewCard(columnId);
     });
   });
-
+  
   const columnTitles = document.querySelectorAll(".column-title-container");
   columnTitles.forEach((titleContainer) => {
     titleContainer.addEventListener("click", (e) => {
@@ -744,7 +743,7 @@ export function setupBoardEventListeners(
       }
     });
   });
-
+  
   const columnMenuBtns = document.querySelectorAll(".column-menu-btn");
   columnMenuBtns.forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -761,7 +760,7 @@ export function setupBoardEventListeners(
       menu.classList.toggle("active");
     });
   });
-
+  
   document.addEventListener("click", (e) => {
     if (
       !e.target.closest(".column-menu") &&
@@ -772,7 +771,7 @@ export function setupBoardEventListeners(
       });
     }
   });
-
+  
   document.querySelectorAll(".column-menu-item").forEach((item) => {
     item.addEventListener("click", (e) => {
       const action = e.target.getAttribute("data-action");
@@ -790,12 +789,12 @@ export function setupBoardEventListeners(
       } else if (action === "delete") {
         deleteColumn(columnId);
       }
-
+      
       const menu = e.target.closest(".column-menu");
       if (menu) menu.classList.remove("active");
     });
   });
-
+  
   const cardEditBtns = document.querySelectorAll(".card-edit-btn");
   cardEditBtns.forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -804,7 +803,7 @@ export function setupBoardEventListeners(
       editCard(taskId);
     });
   });
-
+  
   const cardDeleteBtns = document.querySelectorAll(".card-delete-btn");
   cardDeleteBtns.forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -813,22 +812,22 @@ export function setupBoardEventListeners(
       deleteCard(taskId);
     });
   });
-
+  
   const cards = document.querySelectorAll(".kanban-card");
   cards.forEach((card) => {
     card.addEventListener("click", (e) => {
       if (e.target.closest(".card-actions, .card-edit-btn, .card-delete-btn")) {
         return;
       }
-
+      
       if (e.target.classList.contains("card-checkbox")) {
         return;
       }
-
+      
       const taskId = card.getAttribute("data-task-id");
       openCardDetailModal(taskId);
     });
-
+    
     const checkbox = card.querySelector(".card-checkbox");
     if (checkbox) {
       checkbox.addEventListener("click", (e) => {
@@ -838,13 +837,13 @@ export function setupBoardEventListeners(
       });
     }
   });
-
+  
   setupDragAndDrop();
-
+  
   setupColumnDragAndDrop();
-
+  
   window.removeEventListener("beforeunload", handleBeforeUnload);
-
+  
   window.addEventListener("beforeunload", handleBeforeUnload);
 }
 
@@ -914,28 +913,28 @@ function handleDragEnd(e) {
 
 function handleDragOver(e) {
   e.preventDefault();
-
+  
   const board = document.getElementById("kanbanBoard");
   if (!board || board.getAttribute("data-dragging") !== "card") return;
-
+  
   if (board.classList.contains("dragging-column")) return;
-
+  
   const cardElement = e.target.closest(".kanban-card");
   const columnElement = e.target.closest(".column-cards");
-
+  
   const isDropIndicator = e.target.classList.contains("card-drop-indicator");
   if (isDropIndicator) {
     return;
   }
-
+  
   const existingIndicator = columnElement?.querySelector(
     ".card-drop-indicator"
   );
-
+  
   if (!cardElement && existingIndicator) {
     return;
   }
-
+  
   document
     .querySelectorAll(".card-drop-indicator")
     .forEach((el) => el.remove());
@@ -948,22 +947,22 @@ function handleDragOver(e) {
   if (columnElement) {
     columnElement.classList.add("drag-over");
   }
-
+  
   if (!cardElement) {
     return;
   }
-
+  
   if (cardElement.classList.contains("dragging")) {
     return;
   }
-
+  
   const rect = cardElement.getBoundingClientRect();
   const y = e.clientY - rect.top;
   const isBottomHalf = y > rect.height / 2;
-
+  
   const indicator = document.createElement("div");
   indicator.className = "card-drop-indicator";
-
+  
   if (isBottomHalf) {
     cardElement.after(indicator);
   } else {
@@ -973,7 +972,7 @@ function handleDragOver(e) {
 
 function handleDragEnter(e) {
   e.preventDefault();
-
+  
   const board = document.getElementById("kanbanBoard");
   if (
     !board ||
@@ -999,7 +998,7 @@ function handleDragLeave(e) {
 
   const columnElement = e.currentTarget;
   const relatedTarget = e.relatedTarget;
-
+  
   if (!columnElement.contains(relatedTarget)) {
     columnElement.classList.remove("drag-over");
   }
@@ -1007,7 +1006,7 @@ function handleDragLeave(e) {
 
 function handleDrop(e) {
   e.preventDefault();
-
+  
   const board = document.getElementById("kanbanBoard");
   if (!board || board.getAttribute("data-dragging") !== "card") return;
 
@@ -1023,11 +1022,11 @@ function handleDrop(e) {
     `.kanban-card[data-task-id="${taskId}"]`
   );
   if (!draggedCard) return;
-
+  
   const dropIndicator = document.querySelector(".card-drop-indicator");
-
+  
   const cardElement = e.target.closest(".kanban-card");
-
+  
   if (sourceColumnId !== targetColumnId) {
     if (dropIndicator) {
       dropIndicator.parentNode.insertBefore(draggedCard, dropIndicator);
@@ -1035,7 +1034,7 @@ function handleDrop(e) {
       const rect = cardElement.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const isBottomHalf = y > rect.height / 2;
-
+      
       if (isBottomHalf) {
         cardElement.after(draggedCard);
       } else {
@@ -1055,7 +1054,7 @@ function handleDrop(e) {
       const rect = cardElement.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const isBottomHalf = y > rect.height / 2;
-
+      
       if (isBottomHalf) {
         cardElement.after(draggedCard);
       } else {
@@ -1067,32 +1066,32 @@ function handleDrop(e) {
 
     updateCardOrderInColumn(sourceColumnId);
   }
-
+  
   document
     .querySelectorAll(".card-drop-indicator")
     .forEach((el) => el.remove());
-
+  
   draggedCard.classList.remove("dragging");
-
+  
   board.removeAttribute("data-dragging");
 }
 
 function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const sourceColumnIndex = boardData.columns.findIndex(
       (col) => col.id === sourceColumnId
     );
     const targetColumnIndex = boardData.columns.findIndex(
       (col) => col.id === targetColumnId
     );
-
+    
     if (sourceColumnIndex === -1 || targetColumnIndex === -1) {
       console.error("Не удалось найти исходную или целевую колонку");
       return;
     }
-
+    
     const taskIndex = boardData.columns[sourceColumnIndex].tasks.findIndex(
       (task) => task.id === taskId
     );
@@ -1100,7 +1099,7 @@ function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
       console.error("Не удалось найти задачу в исходной колонке");
       return;
     }
-
+    
     const task = boardData.columns[sourceColumnIndex].tasks.splice(
       taskIndex,
       1
@@ -1113,10 +1112,10 @@ function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
 
     const newTasks = [];
     let taskAdded = false;
-
+    
     cardElements.forEach((card) => {
       const cardId = card.getAttribute("data-task-id");
-
+      
       if (cardId === taskId) {
         taskAdded = true;
         newTasks.push(task);
@@ -1129,9 +1128,9 @@ function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
         }
       }
     });
-
+    
     boardData.columns[targetColumnIndex].tasks = newTasks;
-
+    
     updateBoardData(boardData);
   } catch (error) {
     console.error("Ошибка при перемещении карточки:", error);
@@ -1141,7 +1140,7 @@ function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
 function updateCardOrderInColumn(columnId) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const columnIndex = boardData.columns.findIndex(
       (col) => col.id === columnId
     );
@@ -1149,7 +1148,7 @@ function updateCardOrderInColumn(columnId) {
       console.error("Не удалось найти колонку");
       return;
     }
-
+    
     const columnCards = document.querySelector(
       `.column-cards[data-column-id="${columnId}"]`
     );
@@ -1165,11 +1164,11 @@ function updateCardOrderInColumn(columnId) {
         newTasks.push(task);
       }
     });
-
+    
     boardData.columns[columnIndex].tasks = newTasks;
-
+    
     updateBoardData(boardData);
-
+    
     console.log("Порядок карточек обновлен в колонке:", columnId);
   } catch (error) {
     console.error("Ошибка при обновлении порядка карточек:", error);
@@ -1179,7 +1178,7 @@ function updateCardOrderInColumn(columnId) {
 async function editBoard(boardId) {
   try {
     const board = await kanbanService.getBoard(boardId);
-
+    
     const newName = prompt("Введите новое название доски:", board.name);
 
     if (newName === null) return;
@@ -1187,14 +1186,14 @@ async function editBoard(boardId) {
       alert("Название доски не может быть пустым");
       return;
     }
-
+    
     const updateData = {
       name: newName,
       boardData: board.boardData,
     };
-
+    
     await kanbanService.updateBoard(boardId, updateData);
-
+    
     window.location.reload();
   } catch (error) {
     console.error(`Ошибка при редактировании доски с ID ${boardId}:`, error);
@@ -1213,18 +1212,18 @@ async function deleteBoard(boardId, onBoardDeleted) {
       await saveBoardData();
     }
   }
-
+  
   const confirmed = window.confirm(
     "Вы уверены, что хотите удалить эту доску? Это действие нельзя отменить."
   );
-
+  
   if (!confirmed) return;
-
+  
   try {
     console.log("Удаление доски с ID:", boardId);
 
     await kanbanService.deleteBoard(boardId);
-
+    
     const cachedBoards = JSON.parse(
       localStorage.getItem("kanban_boards_cache") || "[]"
     );
@@ -1243,7 +1242,7 @@ async function deleteBoard(boardId, onBoardDeleted) {
       updateBoardsCache(updatedMemoryCache);
       console.log("Кэш досок в памяти обновлен после удаления");
     }
-
+    
     if (typeof onBoardDeleted === "function") {
       console.log("Вызываем коллбэк после удаления доски");
       onBoardDeleted();
@@ -1263,23 +1262,23 @@ async function deleteBoard(boardId, onBoardDeleted) {
 function addNewColumn() {
   const columnName = prompt("Введите название новой колонки:");
   if (!columnName || columnName.trim() === "") return;
-
+  
   try {
     const columnId = "column_" + Date.now();
-
+    
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     boardData.columns.push({
       id: columnId,
       name: columnName,
       tasks: [],
     });
-
+    
     updateBoardData(boardData);
-
+    
     const kanbanBoard = document.getElementById("kanbanBoard");
     const addColumnContainer = document.querySelector(".add-column-container");
-
+    
     const newColumnHtml = `
       <div class="kanban-column" data-column-id="${columnId}">
         <div class="column-header">
@@ -1303,20 +1302,20 @@ function addNewColumn() {
         </div>
       </div>
     `;
-
+    
     const newColumn = document.createElement("div");
     newColumn.innerHTML = newColumnHtml;
     kanbanBoard.insertBefore(newColumn.firstElementChild, addColumnContainer);
-
+    
     const newColumnElement = kanbanBoard.querySelector(
       `.kanban-column[data-column-id="${columnId}"]`
     );
-
+    
     const addCardBtn = newColumnElement.querySelector(".add-card-btn");
     addCardBtn.addEventListener("click", () => {
       addNewCard(columnId);
     });
-
+    
     const columnTitleContainer = newColumnElement.querySelector(
       ".column-title-container"
     );
@@ -1326,7 +1325,7 @@ function addNewColumn() {
         startEditColumnTitle(titleElement, columnId);
       }
     });
-
+    
     const menuBtn = newColumnElement.querySelector(".column-menu-btn");
     menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1353,28 +1352,28 @@ function addNewColumn() {
 function startEditColumnTitle(titleElement, columnId) {
   const titleContainer = titleElement.closest(".column-title-container");
   if (!titleContainer) return;
-
+  
   const currentName = titleElement.textContent;
-
+  
   const inputElement = document.createElement("input");
   inputElement.type = "text";
   inputElement.value = currentName;
   inputElement.className = "column-title-edit";
   inputElement.setAttribute("data-column-id", columnId);
-
+  
   titleContainer.innerHTML = "";
   titleContainer.appendChild(inputElement);
-
+  
   inputElement.focus();
   inputElement.select();
-
+  
   const handleClickOutside = (e) => {
     if (e.target !== inputElement) {
       finishEditColumnTitle(inputElement, titleContainer, columnId);
       document.removeEventListener("click", handleClickOutside);
     }
   };
-
+  
   const handleEnterKey = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -1392,11 +1391,11 @@ function startEditColumnTitle(titleElement, columnId) {
       }, 10);
     }
   };
-
+  
   setTimeout(() => {
     document.addEventListener("click", handleClickOutside);
   }, 10);
-
+  
   inputElement.addEventListener("keydown", handleEnterKey);
 }
 
@@ -1405,18 +1404,18 @@ function restoreColumnTitle(titleContainer, columnId, title) {
   h3.className = "column-title";
   h3.setAttribute("data-column-id", columnId);
   h3.textContent = title;
-
+  
   titleContainer.innerHTML = "";
   titleContainer.appendChild(h3);
 }
 
 function finishEditColumnTitle(inputElement, titleContainer, columnId) {
   const newName = inputElement.value.trim();
-
+  
   if (newName !== "") {
     try {
       const boardData = JSON.parse(currentBoardData.boardData);
-
+      
       const columnIndex = boardData.columns.findIndex(
         (column) => column.id === columnId
       );
@@ -1427,23 +1426,23 @@ function finishEditColumnTitle(inputElement, titleContainer, columnId) {
         restoreColumnTitle(titleContainer, columnId, defaultValue);
         return;
       }
-
+      
       const currentName = boardData.columns[columnIndex].name;
-
+      
       if (newName === currentName) {
         restoreColumnTitle(titleContainer, columnId, currentName);
         return;
       }
-
+      
       boardData.columns[columnIndex].name = newName;
-
+      
       updateBoardData(boardData);
-
+      
       restoreColumnTitle(titleContainer, columnId, newName);
     } catch (error) {
       console.error("Ошибка при редактировании колонки:", error);
       alert("Не удалось отредактировать колонку: " + error.message);
-
+      
       const boardData = JSON.parse(currentBoardData.boardData);
       const columnIndex = boardData.columns.findIndex(
         (column) => column.id === columnId
@@ -1482,10 +1481,10 @@ function deleteColumn(columnId) {
     "Вы уверены, что хотите удалить эту колонку? Все карточки в колонке будут удалены."
   );
   if (!confirmed) return;
-
+  
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const columnIndex = boardData.columns.findIndex(
       (column) => column.id === columnId
     );
@@ -1493,11 +1492,11 @@ function deleteColumn(columnId) {
       console.error("Колонка не найдена");
       return;
     }
-
+    
     boardData.columns.splice(columnIndex, 1);
-
+    
     updateBoardData(boardData);
-
+    
     const columnElement = document.querySelector(
       `.kanban-column[data-column-id="${columnId}"]`
     );
@@ -1523,14 +1522,14 @@ function addNewCard(columnId) {
     addCardBtn.style.display = "";
     return;
   }
-
+  
   addCardBtn.style.display = "none";
 
   const formContainer = document.createElement("div");
   formContainer.className = "add-card-form-container";
 
   columnFooter.appendChild(formContainer);
-
+  
   formContainer.innerHTML = `
     <div class="add-card-form">
       <textarea class="card-input" placeholder="Введите название или вставьте ссылку"></textarea>
@@ -1540,35 +1539,35 @@ function addNewCard(columnId) {
       </div>
     </div>
   `;
-
+  
   const textarea = formContainer.querySelector(".card-input");
   const submitBtn = formContainer.querySelector(".add-card-submit-btn");
   const cancelBtn = formContainer.querySelector(".add-card-cancel-btn");
 
   textarea.focus();
-
+  
   submitBtn.addEventListener("click", () => {
     const cardTitle = textarea.value.trim();
     if (!cardTitle) return;
-
+    
     submitNewCard(columnId, cardTitle);
-
+    
     formContainer.remove();
     addCardBtn.style.display = "";
   });
-
+  
   cancelBtn.addEventListener("click", () => {
     formContainer.remove();
     addCardBtn.style.display = "";
   });
-
+  
   textarea.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const cardTitle = textarea.value.trim();
       if (cardTitle) {
         submitNewCard(columnId, cardTitle);
-
+        
         formContainer.remove();
         addCardBtn.style.display = "";
       }
@@ -1582,9 +1581,9 @@ function addNewCard(columnId) {
 function submitNewCard(columnId, cardTitle) {
   try {
     const cardDescription = "";
-
+    
     const taskId = "task_" + Date.now();
-
+    
     const newTask = {
       id: taskId,
       title: cardTitle,
@@ -1592,9 +1591,9 @@ function submitNewCard(columnId, cardTitle) {
       createdAt: new Date().toISOString(),
       completed: false,
     };
-
+    
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const columnIndex = boardData.columns.findIndex(
       (column) => column.id === columnId
     );
@@ -1602,11 +1601,11 @@ function submitNewCard(columnId, cardTitle) {
       console.error("Колонка не найдена");
       return;
     }
-
+    
     boardData.columns[columnIndex].tasks.push(newTask);
-
+    
     updateBoardData(boardData);
-
+    
     const columnCards = document.querySelector(
       `.column-cards[data-column-id="${columnId}"]`
     );
@@ -1623,12 +1622,12 @@ function submitNewCard(columnId, cardTitle) {
           </div>
         </div>
       `;
-
+      
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = cardHtml;
       const cardElement = tempDiv.firstElementChild;
       columnCards.appendChild(cardElement);
-
+      
       cardElement.addEventListener("dragstart", handleDragStart);
       cardElement.addEventListener("dragend", handleDragEnd);
       cardElement.addEventListener("dragover", handleDragOver);
@@ -1642,7 +1641,7 @@ function submitNewCard(columnId, cardTitle) {
           toggleTaskCompletion(taskId);
         });
       }
-
+      
       cardElement.addEventListener("click", (e) => {
         if (e.target.classList.contains("card-checkbox")) {
           return;
@@ -1660,15 +1659,15 @@ function submitNewCard(columnId, cardTitle) {
 function editCard(taskId) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     let foundTask = null;
     let columnIndex = -1;
     let taskIndex = -1;
-
+    
     for (let i = 0; i < boardData.columns.length; i++) {
       const column = boardData.columns[i];
       const tIndex = column.tasks.findIndex((task) => task.id === taskId);
-
+      
       if (tIndex !== -1) {
         columnIndex = i;
         taskIndex = tIndex;
@@ -1676,12 +1675,12 @@ function editCard(taskId) {
         break;
       }
     }
-
+    
     if (!foundTask) {
       console.error("Карточка не найдена");
       return;
     }
-
+    
     const cardElement = document.querySelector(
       `.kanban-card[data-task-id="${taskId}"]`
     );
@@ -1689,9 +1688,9 @@ function editCard(taskId) {
       console.error("Элемент карточки не найден в DOM");
       return;
     }
-
+    
     const originalContent = cardElement.innerHTML;
-
+    
     cardElement.innerHTML = `
       <div class="edit-card-form">
         <textarea class="card-title-input" placeholder="Название карточки">${
@@ -1706,7 +1705,7 @@ function editCard(taskId) {
         </div>
       </div>
     `;
-
+    
     cardElement.classList.add("editing");
 
     const titleInput = cardElement.querySelector(".card-title-input");
@@ -1718,16 +1717,16 @@ function editCard(taskId) {
 
     titleInput.focus();
     titleInput.select();
-
+    
     saveBtn.addEventListener("click", () => {
       const newTitle = titleInput.value.trim();
       const newDescription = descriptionInput.value.trim();
-
+      
       if (!newTitle) {
         alert("Название карточки не может быть пустым");
         return;
       }
-
+      
       if (
         newTitle === foundTask.title &&
         newDescription === foundTask.description
@@ -1736,7 +1735,7 @@ function editCard(taskId) {
         cardElement.classList.remove("editing");
         return;
       }
-
+      
       boardData.columns[columnIndex].tasks[taskIndex].title = newTitle;
       boardData.columns[columnIndex].tasks[taskIndex].description =
         newDescription;
@@ -1744,7 +1743,7 @@ function editCard(taskId) {
         new Date().toISOString();
 
       updateBoardData(boardData);
-
+      
       const commentsCount = boardData.columns[columnIndex].tasks[taskIndex]
         .comments
         ? boardData.columns[columnIndex].tasks[taskIndex].comments.length
@@ -1788,7 +1787,7 @@ function editCard(taskId) {
           </div>
         </div>
       `;
-
+      
       cardElement.addEventListener("dragstart", handleDragStart);
       cardElement.addEventListener("dragend", handleDragEnd);
       cardElement.addEventListener("dragover", handleDragOver);
@@ -1801,7 +1800,7 @@ function editCard(taskId) {
           toggleTaskCompletion(taskId);
         });
       }
-
+      
       cardElement.addEventListener("click", (e) => {
         if (e.target.classList.contains("card-checkbox")) {
           return;
@@ -1809,7 +1808,7 @@ function editCard(taskId) {
         openCardDetailModal(taskId);
       });
     });
-
+    
     cancelBtn.addEventListener("click", () => {
       cardElement.innerHTML = originalContent;
       cardElement.classList.remove("editing");
@@ -1826,7 +1825,7 @@ function editCard(taskId) {
         openCardDetailModal(taskId);
       });
     });
-
+    
     function handleKeydown(e) {
       if (e.key === "Enter" && e.ctrlKey) {
         e.preventDefault();
@@ -1836,10 +1835,10 @@ function editCard(taskId) {
         cancelBtn.click();
       }
     }
-
+    
     titleInput.addEventListener("keydown", handleKeydown);
     descriptionInput.addEventListener("keydown", handleKeydown);
-
+    
     cardElement.setAttribute("draggable", "false");
   } catch (error) {
     console.error("Ошибка при редактировании карточки:", error);
@@ -1850,7 +1849,7 @@ function editCard(taskId) {
 function deleteCard(taskId) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container delete-card-modal">
       <div class="modal-header">
@@ -1867,61 +1866,61 @@ function deleteCard(taskId) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   const closeModal = () => {
     modalOverlay.classList.remove("active");
     setTimeout(() => {
       document.body.removeChild(modalOverlay);
     }, 300);
   };
-
+  
   modalOverlay
     .querySelector(".modal-close")
     .addEventListener("click", closeModal);
-
+  
   document.getElementById("cancelDelete").addEventListener("click", closeModal);
-
+  
   document.getElementById("confirmDelete").addEventListener("click", () => {
     try {
       const boardData = JSON.parse(currentBoardData.boardData);
-
+      
       let columnIndex = -1;
       let taskIndex = -1;
-
+      
       for (let i = 0; i < boardData.columns.length; i++) {
         const column = boardData.columns[i];
         const tIndex = column.tasks.findIndex((task) => task.id === taskId);
-
+        
         if (tIndex !== -1) {
           columnIndex = i;
           taskIndex = tIndex;
           break;
         }
       }
-
+      
       if (columnIndex === -1 || taskIndex === -1) {
         console.error("Карточка не найдена");
         closeModal();
         return;
       }
-
+      
       boardData.columns[columnIndex].tasks.splice(taskIndex, 1);
-
+      
       updateBoardData(boardData);
-
+      
       const cardElement = document.querySelector(
         `.kanban-card[data-task-id="${taskId}"]`
       );
       if (cardElement) {
         cardElement.remove();
       }
-
+      
       closeModal();
     } catch (error) {
       console.error("Ошибка при удалении карточки:", error);
@@ -1929,20 +1928,20 @@ function deleteCard(taskId) {
       closeModal();
     }
   });
-
+  
   modalOverlay.addEventListener("click", (e) => {
     if (e.target === modalOverlay) {
       closeModal();
     }
   });
-
+  
   const handleKeydown = (e) => {
     if (e.key === "Escape") {
       closeModal();
       document.removeEventListener("keydown", handleKeydown);
     }
   };
-
+  
   document.addEventListener("keydown", handleKeydown);
 }
 
@@ -1950,19 +1949,19 @@ function updateBoardData(boardData) {
   try {
     const stringifiedData = JSON.stringify(boardData);
     currentBoardData.boardData = stringifiedData;
-
+    
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
       saveStatus.textContent = "Изменения не сохранены...";
       saveStatus.classList.add("unsaved");
     }
-
+    
     boardChanged = true;
-
+    
     currentBoardData._hasUnsavedChanges = true;
-
+    
     console.log("Обновление данных доски:", currentBoardData.id);
-
+    
     const boardsCache = getBoardsCache();
     if (boardsCache) {
       const boardIndex = boardsCache.findIndex(
@@ -1971,7 +1970,7 @@ function updateBoardData(boardData) {
       if (boardIndex !== -1) {
         const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
         updatedBoard._hasUnsavedChanges = true;
-
+        
         boardsCache[boardIndex] = updatedBoard;
         updateBoardsCache(boardsCache);
         console.log("Кэш в памяти обновлен, индекс доски:", boardIndex);
@@ -1988,13 +1987,13 @@ function updateBoardData(boardData) {
     const boardIndex = localStorageCache.findIndex(
       (board) => board.id == currentBoardData.id
     );
-
+    
     if (boardIndex !== -1) {
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       updatedBoard._hasUnsavedChanges = true;
-
+      
       localStorageCache[boardIndex] = updatedBoard;
-
+      
       localStorage.setItem(
         "kanban_boards_cache",
         JSON.stringify(localStorageCache)
@@ -2021,10 +2020,10 @@ function updateBoardData(boardData) {
         "Доска не найдена в кэше localStorage:",
         currentBoardData.id
       );
-
+      
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       updatedBoard._hasUnsavedChanges = true;
-
+      
       localStorageCache.push(updatedBoard);
       localStorage.setItem(
         "kanban_boards_cache",
@@ -2036,7 +2035,7 @@ function updateBoardData(boardData) {
     if (saveTimer) {
       clearTimeout(saveTimer);
     }
-
+    
     saveTimer = setTimeout(() => {
       saveBoardData();
     }, SAVE_DELAY);
@@ -2047,7 +2046,7 @@ function updateBoardData(boardData) {
 
 async function saveBoardData() {
   if (!boardChanged) return;
-
+  
   try {
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
@@ -2059,22 +2058,22 @@ async function saveBoardData() {
     if (!currentBoardData || !currentBoardData.id) {
       throw new Error("Данные доски недоступны");
     }
-
+    
     const updateData = {
       name: currentBoardData.name,
       boardData: currentBoardData.boardData,
     };
-
+    
     console.log("Сохранение доски на сервере:", currentBoardData.id);
-
+    
     await kanbanService.updateBoard(currentBoardData.id, updateData);
-
+    
     delete currentBoardData._hasUnsavedChanges;
-
+    
     boardChanged = false;
-
+    
     console.log("Доска успешно сохранена на сервере, обновляем кэши");
-
+    
     const boardsCache = getBoardsCache();
     if (boardsCache) {
       const boardIndex = boardsCache.findIndex(
@@ -2121,7 +2120,7 @@ async function saveBoardData() {
         "Доска не найдена в кэше localStorage:",
         currentBoardData.id
       );
-
+      
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       localStorageCache.push(updatedBoard);
       localStorage.setItem(
@@ -2140,7 +2139,7 @@ async function saveBoardData() {
     console.log("Доска успешно сохранена");
   } catch (error) {
     console.error("Ошибка при сохранении доски:", error);
-
+    
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
       saveStatus.textContent = "Ошибка сохранения! Попробуйте снова.";
@@ -2156,21 +2155,21 @@ function forceSaveBoardData() {
       name: currentBoardData.name,
       boardData: currentBoardData.boardData,
     };
-
+    
     console.log("Принудительное сохранение доски:", currentBoardData.id);
-
+    
     try {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", `/api/boards/${currentBoardData.id}`, false);
       xhr.setRequestHeader("Content-Type", "application/json");
       xhr.send(JSON.stringify(updateData));
-
+      
       if (xhr.status >= 200 && xhr.status < 300) {
         delete currentBoardData._hasUnsavedChanges;
         boardChanged = false;
-
+        
         console.log("Доска принудительно сохранена, обновляем кэши");
-
+        
         const boardsCache = getBoardsCache();
         if (boardsCache) {
           const boardIndex = boardsCache.findIndex(
@@ -2219,26 +2218,26 @@ function forceSaveBoardData() {
 
 export function cleanupBoardEventListeners() {
   window.removeEventListener("beforeunload", handleBeforeUnload);
-
+  
   if (boardChanged && currentBoardData) {
     forceSaveBoardData();
   }
-
+  
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-
+  
   boardChanged = false;
   currentBoardData = null;
-
+  
   console.log("Очистка слушателей событий доски выполнена");
 }
 
 function setupColumnDragAndDrop() {
   const columns = document.querySelectorAll(".kanban-column");
   const board = document.getElementById("kanbanBoard");
-
+  
   columns.forEach((column) => {
     const columnHeader = column.querySelector(".column-header");
     if (columnHeader) {
@@ -2260,30 +2259,30 @@ function setupColumnDragAndDrop() {
 function handleColumnDragStart(e) {
   const column = e.target.closest(".kanban-column");
   if (!column) return;
-
+  
   try {
     const ghostImage = column.cloneNode(true);
-
+    
     ghostImage.style.position = "absolute";
     ghostImage.style.top = "-1000px";
     ghostImage.style.opacity = "0.8";
     ghostImage.style.transform = "scale(0.8)";
     ghostImage.style.width = `${column.offsetWidth}px`;
-
+    
     document.body.appendChild(ghostImage);
     e.dataTransfer.setDragImage(ghostImage, 10, 10);
-
+    
     setTimeout(() => {
       document.body.removeChild(ghostImage);
     }, 0);
   } catch (error) {
     console.error("Ошибка при создании превью перетаскивания:", error);
   }
-
+  
   e.dataTransfer.setData("column-id", column.getAttribute("data-column-id"));
-
+  
   e.dataTransfer.setData("dragging-type", "column");
-
+  
   e.dataTransfer.effectAllowed = "move";
 
   setTimeout(() => {
@@ -2306,13 +2305,13 @@ function handleColumnDragStart(e) {
 function handleColumnDragEnd(e) {
   const column = e.target.closest(".kanban-column");
   if (!column) return;
-
+  
   column.classList.remove("dragging");
-
+  
   document
     .querySelectorAll(".column-drop-indicator")
     .forEach((el) => el.remove());
-
+  
   const board = document.getElementById("kanbanBoard");
   if (board) {
     board.removeAttribute("data-dragging");
@@ -2327,32 +2326,32 @@ function handleColumnDragEnd(e) {
 
 function handleColumnDragOver(e) {
   e.preventDefault();
-
+  
   const board = document.getElementById("kanbanBoard");
   if (!board || board.getAttribute("data-dragging") !== "column") return;
-
+  
   if (e.target.classList.contains("column-drop-indicator")) {
     return;
   }
-
+  
   const columns = Array.from(
     document.querySelectorAll(".kanban-column:not(.dragging)")
   );
   if (!columns.length) return;
-
+  
   const closestColumn = findClosestColumn(e.clientX, columns);
   if (!closestColumn) return;
-
+  
   document
     .querySelectorAll(".column-drop-indicator")
     .forEach((el) => el.remove());
-
+  
   const rect = closestColumn.getBoundingClientRect();
   const isLeftHalf = e.clientX < rect.left + rect.width / 2;
-
+  
   const indicator = document.createElement("div");
   indicator.className = "column-drop-indicator";
-
+  
   if (isLeftHalf) {
     closestColumn.before(indicator);
   } else {
@@ -2363,61 +2362,61 @@ function handleColumnDragOver(e) {
 function findClosestColumn(mouseX, columns) {
   let closestColumn = null;
   let closestDistance = Infinity;
-
+  
   columns.forEach((column) => {
     const rect = column.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const distance = Math.abs(mouseX - centerX);
-
+    
     if (distance < closestDistance) {
       closestDistance = distance;
       closestColumn = column;
     }
   });
-
+  
   return closestColumn;
 }
 
 function handleColumnDrop(e) {
   e.preventDefault();
-
+  
   const board = document.getElementById("kanbanBoard");
   if (!board || board.getAttribute("data-dragging") !== "column") return;
-
+  
   const columnId = e.dataTransfer.getData("column-id");
   if (!columnId) return;
-
+  
   const draggedColumn = document.querySelector(
     `.kanban-column[data-column-id="${columnId}"]`
   );
   if (!draggedColumn) return;
-
+  
   const indicator = document.querySelector(".column-drop-indicator");
   if (indicator) {
     indicator.parentNode.insertBefore(draggedColumn, indicator);
     indicator.remove();
-
+    
     updateColumnsOrder();
   } else {
     const columns = Array.from(
       document.querySelectorAll(".kanban-column:not(.dragging)")
     );
     const closestColumn = findClosestColumn(e.clientX, columns);
-
+    
     if (closestColumn) {
       const rect = closestColumn.getBoundingClientRect();
       const isLeftHalf = e.clientX < rect.left + rect.width / 2;
-
+      
       if (isLeftHalf) {
         closestColumn.before(draggedColumn);
       } else {
         closestColumn.after(draggedColumn);
       }
-
+      
       updateColumnsOrder();
     }
   }
-
+  
   board.removeAttribute("data-dragging");
   board.classList.remove("dragging-column");
 
@@ -2430,10 +2429,10 @@ function handleColumnDrop(e) {
 function updateColumnsOrder() {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const columnElements = document.querySelectorAll(".kanban-column");
     const newColumns = [];
-
+    
     columnElements.forEach((columnElement) => {
       const columnId = columnElement.getAttribute("data-column-id");
       const column = boardData.columns.find((c) => c.id === columnId);
@@ -2441,11 +2440,11 @@ function updateColumnsOrder() {
         newColumns.push(column);
       }
     });
-
+    
     boardData.columns = newColumns;
-
+    
     updateBoardData(boardData);
-
+    
     console.log("Порядок колонок обновлен");
   } catch (error) {
     console.error("Ошибка при обновлении порядка колонок:", error);
@@ -2455,7 +2454,7 @@ function updateColumnsOrder() {
 function copyColumn(columnId) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const sourceColumn = boardData.columns.find(
       (column) => column.id === columnId
     );
@@ -2463,14 +2462,14 @@ function copyColumn(columnId) {
       console.error("Колонка не найдена");
       return;
     }
-
+    
     const columnElement = document.querySelector(
       `.kanban-column[data-column-id="${columnId}"]`
     );
     const columnHeader = columnElement.querySelector(".column-header");
 
     const originalContent = columnHeader.innerHTML;
-
+    
     const inputContainer = document.createElement("div");
     inputContainer.className = "column-copy-form";
     inputContainer.innerHTML = `
@@ -2480,17 +2479,17 @@ function copyColumn(columnId) {
         <button class="column-copy-cancel">Отмена</button>
       </div>
     `;
-
+    
     columnHeader.innerHTML = "";
     columnHeader.appendChild(inputContainer);
-
+    
     const inputElement = inputContainer.querySelector(".column-copy-input");
     inputElement.focus();
     inputElement.select();
-
+    
     const restoreHeaderWithEventListeners = () => {
       columnHeader.innerHTML = originalContent;
-
+      
       const menuBtn = columnHeader.querySelector(".column-menu-btn");
       if (menuBtn) {
         menuBtn.addEventListener("click", (e) => {
@@ -2521,12 +2520,12 @@ function copyColumn(columnId) {
           } else if (action === "delete") {
             deleteColumn(colId);
           }
-
+          
           const menu = e.target.closest(".column-menu");
           if (menu) menu.classList.remove("active");
         });
       });
-
+      
       columnHeader.setAttribute("draggable", "true");
       columnHeader.addEventListener("dragstart", handleColumnDragStart);
       columnHeader.addEventListener("dragend", handleColumnDragEnd);
@@ -2543,7 +2542,7 @@ function copyColumn(columnId) {
         });
       }
     };
-
+    
     const saveButton = inputContainer.querySelector(".column-copy-save");
     saveButton.addEventListener("click", () => {
       const newColumnName = inputElement.value.trim();
@@ -2553,12 +2552,12 @@ function copyColumn(columnId) {
 
       restoreHeaderWithEventListeners();
     });
-
+    
     const cancelButton = inputContainer.querySelector(".column-copy-cancel");
     cancelButton.addEventListener("click", () => {
       restoreHeaderWithEventListeners();
     });
-
+    
     inputElement.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -2583,27 +2582,27 @@ function copyColumn(columnId) {
 function createColumnCopy(sourceColumn, newColumnName) {
   try {
     const newColumnId = "column_" + Date.now();
-
+    
     const columnCopy = {
       id: newColumnId,
       name: newColumnName,
       tasks: JSON.parse(JSON.stringify(sourceColumn.tasks)),
     };
-
+    
     columnCopy.tasks.forEach((task) => {
       task.id = "task_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     });
-
+    
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     const sourceColumnIndex = boardData.columns.findIndex(
       (col) => col.id === sourceColumn.id
     );
-
+    
     boardData.columns.splice(sourceColumnIndex + 1, 0, columnCopy);
-
+    
     updateBoardData(boardData);
-
+    
     const kanbanBoard = document.getElementById("kanbanBoard");
     const sourceColumnElement = document.querySelector(
       `.kanban-column[data-column-id="${sourceColumn.id}"]`
@@ -2625,7 +2624,7 @@ function createColumnCopy(sourceColumn, newColumnName) {
     `
       )
       .join("");
-
+    
     const newColumnHtml = `
       <div class="kanban-column" data-column-id="${newColumnId}">
         <div class="column-header">
@@ -2649,11 +2648,11 @@ function createColumnCopy(sourceColumn, newColumnName) {
         </div>
       </div>
     `;
-
+    
     const newColumnElement = document.createElement("div");
     newColumnElement.innerHTML = newColumnHtml;
     const newColumn = newColumnElement.firstElementChild;
-
+    
     if (sourceColumnElement.nextElementSibling) {
       kanbanBoard.insertBefore(
         newColumn,
@@ -2665,7 +2664,7 @@ function createColumnCopy(sourceColumn, newColumnName) {
         document.querySelector(".add-column-container")
       );
     }
-
+    
     setupColumnEventListeners(newColumn);
   } catch (error) {
     console.error("Ошибка при создании копии колонки:", error);
@@ -2676,11 +2675,11 @@ function createColumnCopy(sourceColumn, newColumnName) {
 function setupColumnEventListeners(columnElement) {
   const addCardBtn = columnElement.querySelector(".add-card-btn");
   const columnId = columnElement.getAttribute("data-column-id");
-
+  
   addCardBtn.addEventListener("click", () => {
     addNewCard(columnId);
   });
-
+  
   const columnTitleContainer = columnElement.querySelector(
     ".column-title-container"
   );
@@ -2690,7 +2689,7 @@ function setupColumnEventListeners(columnElement) {
       startEditColumnTitle(titleElement, columnId);
     }
   });
-
+  
   const menuBtn = columnElement.querySelector(".column-menu-btn");
   menuBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -2719,12 +2718,12 @@ function setupColumnEventListeners(columnElement) {
       } else if (action === "delete") {
         deleteColumn(colId);
       }
-
+      
       const menu = e.target.closest(".column-menu");
       if (menu) menu.classList.remove("active");
     });
   });
-
+  
   const columnHeader = columnElement.querySelector(".column-header");
   columnHeader.setAttribute("draggable", "true");
   columnHeader.addEventListener("dragstart", handleColumnDragStart);
@@ -2754,11 +2753,11 @@ function setupColumnEventListeners(columnElement) {
 function openCardDetailModal(taskId) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     let foundTask = null;
     let columnName = "";
     let columnId = "";
-
+    
     for (const column of boardData.columns) {
       const task = column.tasks.find((t) => t.id === taskId);
       if (task) {
@@ -2768,19 +2767,19 @@ function openCardDetailModal(taskId) {
         break;
       }
     }
-
+    
     if (!foundTask) {
       console.error("Карточка не найдена");
       return;
     }
-
+    
     if (!foundTask.comments) {
       foundTask.comments = [];
     }
     if (!foundTask.checklists) {
       foundTask.checklists = [];
     }
-
+    
     const createdDate = new Date(foundTask.createdAt);
     const formattedDate = createdDate.toLocaleString("ru-RU", {
       day: "2-digit",
@@ -2800,12 +2799,12 @@ function openCardDetailModal(taskId) {
         " " +
         (currentUser.lastName || "")
       ).trim() ||
-      currentUser.name ||
+      currentUser.name || 
       "Пользователь";
-
+    
     const modalOverlay = document.createElement("div");
     modalOverlay.className = "modal-overlay";
-
+    
     modalOverlay.innerHTML = `
       <div class="modal-container card-detail-modal">
         <div class="card-modal-header">
@@ -2933,9 +2932,9 @@ function openCardDetailModal(taskId) {
         </div>
       </div>
     `;
-
+    
     document.body.appendChild(modalOverlay);
-
+    
     setTimeout(() => {
       modalOverlay.classList.add("active");
 
@@ -2949,30 +2948,30 @@ function openCardDetailModal(taskId) {
         }
       });
     }, 10);
-
+    
     const closeModal = () => {
       modalOverlay.classList.remove("active");
       setTimeout(() => {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     modalOverlay
       .querySelector(".card-modal-close")
       .addEventListener("click", closeModal);
-
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
       }
     });
-
+    
     const titleElement = modalOverlay.querySelector(".card-title-editable");
     titleElement.addEventListener("click", function (e) {
       if (this.querySelector(".card-title-input-inline")) {
         return;
       }
-
+      
       const currentTitle = this.textContent;
       const input = document.createElement("input");
       input.value = currentTitle;
@@ -2980,10 +2979,10 @@ function openCardDetailModal(taskId) {
       this.innerHTML = "";
       this.appendChild(input);
       input.focus();
-
+      
       const valueLength = input.value.length;
       input.setSelectionRange(valueLength, valueLength);
-
+      
       const saveTitle = () => {
         const newTitle = input.value.trim();
         if (newTitle) {
@@ -2993,16 +2992,16 @@ function openCardDetailModal(taskId) {
             if (taskIndex !== -1) {
               column.tasks[taskIndex].title = newTitle;
               column.tasks[taskIndex].updatedAt = new Date().toISOString();
-
+              
               titleElement.textContent = newTitle;
-
+              
               const cardElement = document.querySelector(
                 `.kanban-card[data-task-id="${taskId}"] .card-title`
               );
               if (cardElement) {
                 cardElement.textContent = newTitle;
               }
-
+              
               updateBoardData(boardData);
               break;
             }
@@ -3011,9 +3010,9 @@ function openCardDetailModal(taskId) {
           titleElement.textContent = currentTitle;
         }
       };
-
+      
       input.addEventListener("blur", saveTitle);
-
+      
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -3022,10 +3021,10 @@ function openCardDetailModal(taskId) {
           titleElement.textContent = currentTitle;
         }
       });
-
+      
       e.stopPropagation();
     });
-
+    
     const descriptionElement = modalOverlay.querySelector(
       ".card-description-editable"
     );
@@ -3045,56 +3044,56 @@ function openCardDetailModal(taskId) {
       textarea.value = currentDescription;
       textarea.className = "card-description-textarea-inline";
       textarea.placeholder = "Добавить более подробное описание...";
-
+      
       const originalContent = this.innerHTML;
-
+      
       this.innerHTML = "";
       this.appendChild(textarea);
       textarea.focus();
-
+      
       textarea.addEventListener("input", handleMentionTextareaInput);
       textarea.addEventListener("keydown", handleMentionTextareaKeydown);
 
       textarea.addEventListener("blur", (event) => {
         setTimeout(() => {
-          const activeElement = document.activeElement;
+            const activeElement = document.activeElement;
 
-          if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
-            return;
-          }
+            if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
+                return;
+            }
 
           if (
             mentionsDropdown &&
             mentionsDropdown.style.display === "block" &&
             currentMentionTextarea === textarea
           ) {
-            hideMentionsDropdown();
-          }
+                hideMentionsDropdown();
+            }
         }, 100);
       });
-
+      
       const saveDescription = () => {
         if (this.getAttribute("data-edit-session") !== editSessionId) {
           return;
         }
-
+        
         const newDescription = textarea.value.trim();
-
+        
         this.innerHTML = "";
-
+        
         this.removeAttribute("data-edit-session");
-
+        
         const boardData = JSON.parse(currentBoardData.boardData);
         for (const column of boardData.columns) {
           const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
           if (taskIndex !== -1) {
             column.tasks[taskIndex].description = newDescription;
             column.tasks[taskIndex].updatedAt = new Date().toISOString();
-
+            
             this.innerHTML = formatTextWithMentions(
               newDescription || "Добавить более подробное описание..."
             );
-
+            
             const cardElement = document.querySelector(
               `.kanban-card[data-task-id="${taskId}"] .card-description`
             );
@@ -3117,25 +3116,25 @@ function openCardDetailModal(taskId) {
                 cardElement.remove();
               }
             }
-
+            
             updateBoardData(boardData);
-
+            
             updateCardIndicators(taskId);
             break;
           }
         }
       };
-
+      
       const cancelEdit = () => {
         if (this.getAttribute("data-edit-session") !== editSessionId) {
           return;
         }
-
+        
         this.removeAttribute("data-edit-session");
-
+        
         this.innerHTML = originalContent;
       };
-
+      
       const actionButtons = document.createElement("div");
       actionButtons.className = "description-edit-actions";
       actionButtons.innerHTML = `
@@ -3143,7 +3142,7 @@ function openCardDetailModal(taskId) {
         <button class="description-cancel-btn">Отмена</button>
       `;
       this.appendChild(actionButtons);
-
+      
       const saveBtn = actionButtons.querySelector(".description-save-btn");
       const cancelBtn = actionButtons.querySelector(".description-cancel-btn");
 
@@ -3151,7 +3150,7 @@ function openCardDetailModal(taskId) {
         "click",
         function (e) {
           e.stopPropagation();
-          saveDescription();
+        saveDescription();
         },
         { once: true }
       );
@@ -3160,17 +3159,17 @@ function openCardDetailModal(taskId) {
         "click",
         function (e) {
           e.stopPropagation();
-          cancelEdit();
+        cancelEdit();
         },
         { once: true }
       );
-
+      
       e.stopPropagation();
     });
-
+    
     const commentInput = modalOverlay.querySelector(".card-comment-input");
     const commentSubmitBtn = modalOverlay.querySelector(".comment-submit-btn");
-
+    
     if (commentInput) {
       console.log(
         "Mentions: Initializing event listeners for comment input:",
@@ -3189,15 +3188,15 @@ function openCardDetailModal(taskId) {
           "Mentions: Comment input blurred. CurrentMentionTextarea:",
           currentMentionTextarea
         );
-        setTimeout(() => {
-          const activeElement = document.activeElement;
+            setTimeout(() => {
+                const activeElement = document.activeElement;
 
-          if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
+                if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
             console.log(
               "Mentions: Blur on comment input, but focus is within the mentions dropdown. Not hiding."
             );
-            return;
-          }
+                    return;
+                }
 
           if (
             mentionsDropdown &&
@@ -3207,20 +3206,20 @@ function openCardDetailModal(taskId) {
             console.log(
               "Mentions: Hiding dropdown due to blur on comment input."
             );
-            hideMentionsDropdown();
-          }
+                    hideMentionsDropdown();
+                }
         }, 150);
-      });
+        });
     } else {
       console.error(
         "Mentions: Comment input field (.card-comment-input) not found in modalOverlay for initialization."
       );
     }
-
+    
     commentSubmitBtn.addEventListener("click", async () => {
       const commentText = commentInput.value.trim();
       if (!commentText) return;
-
+      
       try {
         let userData;
         try {
@@ -3232,7 +3231,7 @@ function openCardDetailModal(taskId) {
           );
 
           userData = authService.getUser();
-
+          
           if (!userData) {
             throw new Error(
               "Не удалось получить данные пользователя для комментария"
@@ -3247,9 +3246,9 @@ function openCardDetailModal(taskId) {
             " " +
             (userData.lastName || "")
           ).trim() ||
-          userData.name ||
+          userData.name || 
           "Пользователь";
-
+        
         const newComment = {
           id: "comment_" + Date.now(),
           author: currentUsername,
@@ -3257,7 +3256,7 @@ function openCardDetailModal(taskId) {
           text: commentText,
           createdAt: new Date().toISOString(),
         };
-
+        
         const boardData = JSON.parse(currentBoardData.boardData);
         for (const column of boardData.columns) {
           const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
@@ -3265,19 +3264,19 @@ function openCardDetailModal(taskId) {
             if (!column.tasks[taskIndex].comments) {
               column.tasks[taskIndex].comments = [];
             }
-
+            
             column.tasks[taskIndex].comments.push(newComment);
             column.tasks[taskIndex].updatedAt = new Date().toISOString();
-
+            
             const commentsContainer = modalOverlay.querySelector(
               ".card-comments-container"
             );
-
+            
             const noComments = commentsContainer.querySelector(".no-comments");
             if (noComments) {
               noComments.remove();
             }
-
+            
             const commentElement = document.createElement("div");
             commentElement.className = "card-comment";
             commentElement.setAttribute("data-comment-id", newComment.id);
@@ -3306,7 +3305,7 @@ function openCardDetailModal(taskId) {
                 </div>
               </div>
             `;
-
+            
             commentsContainer.insertBefore(
               commentElement,
               commentsContainer.firstChild
@@ -3320,13 +3319,13 @@ function openCardDetailModal(taskId) {
             editBtn.addEventListener("click", () => {
               editComment(taskId, newComment.id, commentElement);
             });
-
+            
             deleteBtn.addEventListener("click", () => {
               deleteComment(taskId, newComment.id, commentElement);
             });
-
+            
             commentInput.value = "";
-
+            
             updateBoardData(boardData);
             break;
           }
@@ -3336,14 +3335,14 @@ function openCardDetailModal(taskId) {
         alert("Не удалось добавить комментарий: " + error.message);
       }
     });
-
+    
     commentInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         commentSubmitBtn.click();
       }
     });
-
+    
     const editBtns = modalOverlay.querySelectorAll(".comment-edit-btn");
     const deleteBtns = modalOverlay.querySelectorAll(".comment-delete-btn");
 
@@ -3356,7 +3355,7 @@ function openCardDetailModal(taskId) {
         editComment(taskId, commentId, commentElement);
       });
     });
-
+    
     deleteBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
         const commentId = btn.getAttribute("data-comment-id");
@@ -3366,7 +3365,7 @@ function openCardDetailModal(taskId) {
         deleteComment(taskId, commentId, commentElement);
       });
     });
-
+    
     const deleteBtn = modalOverlay.querySelector(".delete-card-btn");
     if (deleteBtn) {
       deleteBtn.addEventListener("click", () => {
@@ -3374,16 +3373,16 @@ function openCardDetailModal(taskId) {
         deleteCard(taskId);
       });
     }
-
+    
     const handleKeydown = (e) => {
       if (e.key === "Escape") {
         closeModal();
         document.removeEventListener("keydown", handleKeydown);
       }
     };
-
+    
     document.addEventListener("keydown", handleKeydown);
-
+    
     const completionCheckbox = modalOverlay.querySelector(
       ".completion-checkbox"
     );
@@ -3392,7 +3391,7 @@ function openCardDetailModal(taskId) {
         e.preventDefault();
         const taskId = e.target.getAttribute("data-task-id");
         toggleTaskCompletion(taskId);
-
+        
         const boardData = JSON.parse(currentBoardData.boardData);
         for (const column of boardData.columns) {
           const task = column.tasks.find((t) => t.id === taskId);
@@ -3403,7 +3402,7 @@ function openCardDetailModal(taskId) {
         }
       });
     }
-
+    
     const modalCheckbox = modalOverlay.querySelector(
       ".task-completion-toggle .card-checkbox"
     );
@@ -3413,7 +3412,7 @@ function openCardDetailModal(taskId) {
         const taskId = e.target.getAttribute("data-task-id");
         toggleTaskCompletion(taskId);
       });
-
+      
       const toggleContainer = modalOverlay.querySelector(
         ".task-completion-toggle"
       );
@@ -3426,7 +3425,7 @@ function openCardDetailModal(taskId) {
         });
       }
     }
-
+    
     const addChecklistButton = modalOverlay.querySelector(".add-checklist-btn");
     if (addChecklistButton) {
       addChecklistButton.addEventListener("click", () => {
@@ -3437,14 +3436,14 @@ function openCardDetailModal(taskId) {
     const checklistElements =
       modalOverlay.querySelectorAll(".checklist-section");
     checklistElements.forEach((checklistElement) => {
-      const checklistId = checklistElement.dataset.checklistId;
+        const checklistId = checklistElement.dataset.checklistId;
       const checklistData = foundTask.checklists.find(
         (cl) => cl.id === checklistId
       );
-      if (checklistData) {
-        updateChecklistProgress(checklistElement, checklistData);
-        setupChecklistEventListeners(checklistElement, taskId, checklistId);
-      }
+        if (checklistData) {
+            updateChecklistProgress(checklistElement, checklistData);
+            setupChecklistEventListeners(checklistElement, taskId, checklistId);
+        }
     });
   } catch (error) {
     console.error("Ошибка при открытии карточки:", error);
@@ -3460,16 +3459,16 @@ function editComment(taskId, commentId, commentElement) {
     let rawText = "";
     for (const column of boardDataForEditText.columns) {
       const task = column.tasks.find((t) => t.id === taskId);
-      if (task && task.comments) {
+        if (task && task.comments) {
         const comment = task.comments.find((c) => c.id === commentId);
-        if (comment) {
-          rawText = comment.text;
-          break;
+            if (comment) {
+                rawText = comment.text;
+                break;
+            }
         }
-      }
-      if (rawText) break;
+        if (rawText) break;
     }
-
+    
     const editForm = document.createElement("div");
     editForm.className = "comment-edit-form";
     editForm.innerHTML = `
@@ -3479,20 +3478,20 @@ function editComment(taskId, commentId, commentElement) {
         <button class="comment-cancel-btn">Отмена</button>
       </div>
     `;
-
+    
     commentTextElement.innerHTML = "";
     commentTextElement.appendChild(editForm);
-
+    
     const textarea = editForm.querySelector(".comment-edit-textarea");
     const saveBtn = editForm.querySelector(".comment-save-btn");
     const cancelBtn = editForm.querySelector(".comment-cancel-btn");
 
     textarea.focus();
-
+    
     saveBtn.addEventListener("click", () => {
       const newText = textarea.value.trim();
       if (!newText) return;
-
+      
       const boardData = JSON.parse(currentBoardData.boardData);
       for (const column of boardData.columns) {
         const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
@@ -3504,20 +3503,20 @@ function editComment(taskId, commentId, commentElement) {
             column.tasks[taskIndex].comments[commentIndex].text = newText;
             column.tasks[taskIndex].comments[commentIndex].updatedAt =
               new Date().toISOString();
-
+            
             commentTextElement.innerHTML = formatTextWithMentions(newText);
-
+            
             updateBoardData(boardData);
             break;
           }
         }
       }
     });
-
+    
     cancelBtn.addEventListener("click", () => {
       commentTextElement.innerHTML = formatTextWithMentions(rawText);
     });
-
+    
     textarea.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -3537,7 +3536,7 @@ function deleteComment(taskId, commentId, commentElement) {
   try {
     const modalOverlay = document.createElement("div");
     modalOverlay.className = "modal-overlay";
-
+    
     modalOverlay.innerHTML = `
       <div class="modal-container delete-card-modal">
         <div class="modal-header">
@@ -3554,43 +3553,43 @@ function deleteComment(taskId, commentId, commentElement) {
         </div>
       </div>
     `;
-
+    
     document.body.appendChild(modalOverlay);
-
+    
     setTimeout(() => {
       modalOverlay.classList.add("active");
     }, 10);
-
+    
     const closeModal = () => {
       modalOverlay.classList.remove("active");
       setTimeout(() => {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     modalOverlay
       .querySelector(".modal-close")
       .addEventListener("click", closeModal);
-
+    
     document
       .getElementById("cancelDeleteComment")
       .addEventListener("click", closeModal);
-
+    
     document
       .getElementById("confirmDeleteComment")
       .addEventListener("click", () => {
-        const boardData = JSON.parse(currentBoardData.boardData);
-        for (const column of boardData.columns) {
+      const boardData = JSON.parse(currentBoardData.boardData);
+      for (const column of boardData.columns) {
           const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
-          if (taskIndex !== -1) {
+        if (taskIndex !== -1) {
             const commentIndex = column.tasks[taskIndex].comments.findIndex(
               (c) => c.id === commentId
             );
-            if (commentIndex !== -1) {
-              column.tasks[taskIndex].comments.splice(commentIndex, 1);
-
-              commentElement.remove();
-
+          if (commentIndex !== -1) {
+            column.tasks[taskIndex].comments.splice(commentIndex, 1);
+            
+            commentElement.remove();
+            
               const commentsContainer = document.querySelector(
                 ".card-comments-container"
               );
@@ -3602,30 +3601,30 @@ function deleteComment(taskId, commentId, commentElement) {
                   '<div class="no-comments">Нет комментариев</div>';
               }
 
-              updateBoardData(boardData);
-
-              updateCardIndicators(taskId);
-              break;
-            }
+            updateBoardData(boardData);
+            
+            updateCardIndicators(taskId);
+            break;
           }
         }
-
-        closeModal();
-      });
-
+      }
+      
+      closeModal();
+    });
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
       }
     });
-
+    
     const handleKeydown = (e) => {
       if (e.key === "Escape") {
         closeModal();
         document.removeEventListener("keydown", handleKeydown);
       }
     };
-
+    
     document.addEventListener("keydown", handleKeydown);
   } catch (error) {
     console.error("Ошибка при удалении комментария:", error);
@@ -3639,11 +3638,11 @@ function updateCardIndicators(taskId) {
       `.kanban-card[data-task-id="${taskId}"]`
     );
     if (!cardElement) return;
-
+    
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     let foundTask = null;
-
+    
     for (const column of boardData.columns) {
       const task = column.tasks.find((t) => t.id === taskId);
       if (task) {
@@ -3651,9 +3650,9 @@ function updateCardIndicators(taskId) {
         break;
       }
     }
-
+    
     if (!foundTask) return;
-
+    
     const commentsCount = foundTask.comments ? foundTask.comments.length : 0;
     const hasDescription =
       foundTask.description && foundTask.description.trim() !== "";
@@ -3695,15 +3694,15 @@ function updateCardIndicators(taskId) {
 function toggleTaskCompletion(taskId) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
-
+    
     let foundTask = null;
     let columnIndex = -1;
     let taskIndex = -1;
-
+    
     for (let i = 0; i < boardData.columns.length; i++) {
       const column = boardData.columns[i];
       const tIndex = column.tasks.findIndex((task) => task.id === taskId);
-
+      
       if (tIndex !== -1) {
         columnIndex = i;
         taskIndex = tIndex;
@@ -3711,21 +3710,21 @@ function toggleTaskCompletion(taskId) {
         break;
       }
     }
-
+    
     if (!foundTask) {
       console.error("Задача не найдена");
       return;
     }
-
+    
     foundTask.completed = !foundTask.completed;
     foundTask.updatedAt = new Date().toISOString();
-
+    
     const cardElement = document.querySelector(
       `.kanban-card[data-task-id="${taskId}"]`
     );
     if (cardElement) {
       const checkbox = cardElement.querySelector(".card-checkbox");
-
+      
       if (foundTask.completed) {
         cardElement.classList.add("completed");
         if (checkbox) checkbox.classList.add("checked");
@@ -3734,7 +3733,7 @@ function toggleTaskCompletion(taskId) {
         if (checkbox) checkbox.classList.remove("checked");
       }
     }
-
+    
     const modalCheckbox = document.querySelector(
       `.task-completion-toggle .card-checkbox[data-task-id="${taskId}"]`
     );
@@ -3745,10 +3744,10 @@ function toggleTaskCompletion(taskId) {
         modalCheckbox.classList.remove("checked");
       }
     }
-
+    
     boardData.columns[columnIndex].tasks[taskIndex] = foundTask;
     updateBoardData(boardData);
-
+    
     console.log(
       `Задача ${taskId} отмечена как ${
         foundTask.completed ? "выполненная" : "невыполненная"
@@ -3787,7 +3786,7 @@ function renderChecklistHTML(checklist, taskId) {
         ${checklist.items
           .map((item) => {
             let assignedUsersHtml = "";
-            if (item.assignedUsers && item.assignedUsers.length > 0) {
+          if (item.assignedUsers && item.assignedUsers.length > 0) {
               assignedUsersHtml = item.assignedUsers
                 .map(
                   (user) => `
@@ -3798,23 +3797,23 @@ function renderChecklistHTML(checklist, taskId) {
             `
                 )
                 .join("");
-            }
+          }
 
             let dueDateHtml = "";
-            if (item.dueDate) {
-              const date = new Date(item.dueDate);
+          if (item.dueDate) {
+            const date = new Date(item.dueDate);
 
-              if (!isNaN(date.getTime())) {
+            if (!isNaN(date.getTime())) {
                 const utcDate = new Date(
                   Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
                 );
                 dueDateHtml = `<span class="checklist-item-duedate" title="Срок: ${utcDate.toLocaleDateString(
                   "ru-RU"
                 )}">📅 ${utcDate.toLocaleDateString("ru-RU")}</span>`;
-              }
             }
+          }
 
-            return `
+          return `
           <div class="checklist-item ${
             item.completed ? "completed" : ""
           }" data-item-id="${item.id}">
@@ -3904,8 +3903,8 @@ function addChecklist(taskId) {
           ) {
             const newSection = document.createElement("div");
             newSection.className = "card-detail-section";
-            newSection.appendChild(labelDiv);
-            newSection.appendChild(checklistsContainer);
+                newSection.appendChild(labelDiv);
+                newSection.appendChild(checklistsContainer);
 
             const descriptionSection = document
               .querySelector(".card-description-editable")
@@ -3915,9 +3914,9 @@ function addChecklist(taskId) {
                 newSection,
                 descriptionSection.nextElementSibling
               );
-            } else if (descriptionSection) {
-              descriptionSection.parentElement.appendChild(newSection);
-            } else {
+                } else if (descriptionSection) {
+                    descriptionSection.parentElement.appendChild(newSection);
+                } else {
               document
                 .querySelector(".card-modal-main-content")
                 .appendChild(newSection);
@@ -4003,7 +4002,7 @@ function addChecklistItem(taskId, checklistId, itemText) {
       id: "item_" + Date.now(),
       text: itemText.trim(),
       completed: false,
-      assignedUsers: [],
+      assignedUsers: [], 
       dueDate: null,
     };
     checklist.items.push(newItem);
@@ -4034,7 +4033,7 @@ function addChecklistItem(taskId, checklistId, itemText) {
         </div>
       `;
       itemsContainer.insertAdjacentHTML("beforeend", newItemHTML);
-
+      
       const newItemElement = itemsContainer.querySelector(
         `.checklist-item[data-item-id="${newItem.id}"]`
       );
@@ -4043,8 +4042,8 @@ function addChecklistItem(taskId, checklistId, itemText) {
           .querySelector(".checklist-item-checkbox")
           .addEventListener("click", () => {
             toggleChecklistItemCompletion(taskId, checklistId, newItem.id);
-          });
-
+        });
+        
         const textElement = newItemElement.querySelector(
           ".checklist-item-text.checklist-item-editable"
         );
@@ -4054,23 +4053,23 @@ function addChecklistItem(taskId, checklistId, itemText) {
             function handleItemTextClick(e) {
               if (this.querySelector("input.checklist-item-edit-input")) {
                 return;
-              }
-              const currentText = this.textContent;
+                }
+                const currentText = this.textContent;
               const input = document.createElement("input");
               input.type = "text";
-              input.value = currentText;
+                input.value = currentText;
               input.className = "checklist-item-edit-input";
-
+                
               this.innerHTML = "";
-              this.appendChild(input);
-              input.focus();
-              input.select();
+                this.appendChild(input);
+                input.focus();
+                input.select();
 
-              const saveItemText = () => {
-                const newText = input.value.trim();
-                if (newText && newText !== currentText) {
-                  const boardDataLocal = JSON.parse(currentBoardData.boardData);
-                  const taskLocal = findTaskById(boardDataLocal, taskId);
+                const saveItemText = () => {
+                    const newText = input.value.trim();
+                    if (newText && newText !== currentText) {
+                        const boardDataLocal = JSON.parse(currentBoardData.boardData);
+                        const taskLocal = findTaskById(boardDataLocal, taskId);
                   const checklistLocal = taskLocal
                     ? taskLocal.checklists.find((cl) => cl.id === checklistId)
                     : null;
@@ -4078,34 +4077,34 @@ function addChecklistItem(taskId, checklistId, itemText) {
                   const itemLocal = checklistLocal
                     ? checklistLocal.items.find((i) => i.id === newItem.id)
                     : null;
-                  if (itemLocal) {
-                    itemLocal.text = newText;
-                    updateBoardData(boardDataLocal);
-                    this.textContent = newText;
-                  } else {
-                    this.textContent = currentText;
-                  }
-                } else {
-                  this.textContent = currentText;
-                }
+                        if (itemLocal) {
+                            itemLocal.text = newText;
+                            updateBoardData(boardDataLocal);
+                            this.textContent = newText; 
+                        } else {
+                            this.textContent = currentText; 
+                        }
+                    } else {
+                        this.textContent = currentText; 
+                    }
                 input.removeEventListener("blur", saveItemText);
                 input.removeEventListener("keydown", handleInputKeydown);
-              };
+                };
 
-              const handleInputKeydown = (event) => {
+                const handleInputKeydown = (event) => {
                 if (event.key === "Enter") {
-                  event.preventDefault();
-                  saveItemText();
+                        event.preventDefault();
+                        saveItemText();
                 } else if (event.key === "Escape") {
-                  this.textContent = currentText;
+                        this.textContent = currentText; 
                   input.removeEventListener("blur", saveItemText);
                   input.removeEventListener("keydown", handleInputKeydown);
-                }
-              };
-
+                    }
+                };
+                
               input.addEventListener("blur", saveItemText);
               input.addEventListener("keydown", handleInputKeydown);
-              e.stopPropagation();
+                e.stopPropagation();
             }
           );
         }
@@ -4115,9 +4114,9 @@ function addChecklistItem(taskId, checklistId, itemText) {
           .addEventListener("click", (e) => {
             e.stopPropagation();
             deleteChecklistItem(taskId, checklistId, newItem.id);
-          });
+        });
 
-        const newElementItemId = newItemElement.dataset.itemId;
+        const newElementItemId = newItemElement.dataset.itemId; 
         console.log(
           `[addChecklistItem] Calling setupChecklistItemActionButtons for new item. DOM ID: ${newElementItemId}, Original newItem.id: ${newItem.id}`
         );
@@ -4286,15 +4285,15 @@ function setupChecklistEventListeners(checklistElement, taskId, checklistId) {
     originalAddInput.parentNode.replaceChild(newAddInput, originalAddInput);
     newAddInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
-        e.preventDefault();
+          e.preventDefault();
 
         const currentAddBtn =
           checklistElement.querySelector(".checklist-add-btn");
         if (currentAddBtn) currentAddBtn.click();
-      }
-    });
+        }
+      });
   }
-
+  
   if (originalAddBtn) {
     const newAddBtn = originalAddBtn.cloneNode(true);
     originalAddBtn.parentNode.replaceChild(newAddBtn, originalAddBtn);
@@ -4325,25 +4324,25 @@ function setupChecklistEventListeners(checklistElement, taskId, checklistId) {
       const deleteItemBtn = itemElement.querySelector(
         ".checklist-item-delete-btn"
       );
-
-      if (checkbox) {
+    
+    if (checkbox) {
         const newCheckbox = checkbox.cloneNode(true);
         checkbox.parentNode.replaceChild(newCheckbox, checkbox);
         newCheckbox.addEventListener("click", () => {
           toggleChecklistItemCompletion(taskId, checklistId, itemId);
         });
-      }
-      if (deleteItemBtn) {
+    }
+    if (deleteItemBtn) {
         const newDeleteItemBtn = deleteItemBtn.cloneNode(true);
         deleteItemBtn.parentNode.replaceChild(newDeleteItemBtn, deleteItemBtn);
         newDeleteItemBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
+          e.stopPropagation(); 
           deleteChecklistItem(taskId, checklistId, itemId);
         });
-      }
+    }
 
-      setupChecklistItemActionButtons(itemElement, taskId, checklistId, itemId);
-    });
+    setupChecklistItemActionButtons(itemElement, taskId, checklistId, itemId);
+  });
 
   const checklistTitleElement = checklistElement.querySelector(
     ".checklist-title-editable"
@@ -4359,58 +4358,58 @@ function setupChecklistEventListeners(checklistElement, taskId, checklistId) {
       "click",
       function handleTitleClick(e) {
         if (this.querySelector(".checklist-title-input-inline")) {
-          return;
-        }
-
-        const currentTitle = this.textContent;
+        return; 
+      }
+      
+      const currentTitle = this.textContent;
         const input = document.createElement("input");
-        input.value = currentTitle;
+      input.value = currentTitle;
         input.className = "checklist-title-input-inline";
         this.innerHTML = "";
-        this.appendChild(input);
-        input.focus();
-
-        const valueLength = input.value.length;
-        input.setSelectionRange(valueLength, valueLength);
-
-        const saveChecklistTitle = () => {
-          const newTitle = input.value.trim();
-          if (newTitle && newTitle !== currentTitle) {
-            const boardData = JSON.parse(currentBoardData.boardData);
-            const task = findTaskById(boardData, taskId);
+      this.appendChild(input);
+      input.focus();
+      
+      const valueLength = input.value.length;
+      input.setSelectionRange(valueLength, valueLength);
+      
+      const saveChecklistTitle = () => {
+        const newTitle = input.value.trim();
+        if (newTitle && newTitle !== currentTitle) {
+          const boardData = JSON.parse(currentBoardData.boardData);
+          const task = findTaskById(boardData, taskId);
             const checklist = task
               ? task.checklists.find((cl) => cl.id === checklistId)
               : null;
-            if (checklist) {
-              checklist.title = newTitle;
-              updateBoardData(boardData);
-              newChecklistTitleElement.textContent = newTitle;
-            } else {
-              newChecklistTitleElement.textContent = currentTitle;
-            }
+          if (checklist) {
+            checklist.title = newTitle;
+            updateBoardData(boardData);
+            newChecklistTitleElement.textContent = newTitle;
           } else {
+              newChecklistTitleElement.textContent = currentTitle;
+          }
+        } else {
             newChecklistTitleElement.textContent = currentTitle;
           }
 
           input.removeEventListener("blur", saveChecklistTitle);
           input.removeEventListener("keydown", handleInputKeydown);
-        };
+      };
 
-        const handleInputKeydown = (event) => {
+      const handleInputKeydown = (event) => {
           if (event.key === "Enter") {
-            event.preventDefault();
-            saveChecklistTitle();
+          event.preventDefault();
+          saveChecklistTitle();
           } else if (event.key === "Escape") {
-            newChecklistTitleElement.textContent = currentTitle;
+          newChecklistTitleElement.textContent = currentTitle; 
             input.removeEventListener("blur", saveChecklistTitle);
             input.removeEventListener("keydown", handleInputKeydown);
-          }
-        };
-
+        }
+      };
+      
         input.addEventListener("blur", saveChecklistTitle);
         input.addEventListener("keydown", handleInputKeydown);
-
-        e.stopPropagation();
+      
+      e.stopPropagation();
       }
     );
   }
@@ -4432,30 +4431,30 @@ function setupChecklistItemActionButtons(
     ".checklist-item-set-due-date-btn"
   );
 
-  if (assignUserBtn) {
-    const newAssignUserBtn = assignUserBtn.cloneNode(true);
-    assignUserBtn.parentNode.replaceChild(newAssignUserBtn, assignUserBtn);
+    if (assignUserBtn) {
+        const newAssignUserBtn = assignUserBtn.cloneNode(true);
+        assignUserBtn.parentNode.replaceChild(newAssignUserBtn, assignUserBtn);
     newAssignUserBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      closeAllChecklistItemPopups();
+            e.stopPropagation();
+            closeAllChecklistItemPopups(); 
 
       const users = await getMentionableUsers("");
-
+            
       const dropdown = document.createElement("div");
       dropdown.className = "checklist-user-dropdown";
 
-      if (!users || users.length === 0) {
+            if (!users || users.length === 0) {
         const noUsersDiv = document.createElement("div");
         noUsersDiv.className = "checklist-user-item-empty";
         noUsersDiv.textContent = "Пользователи не найдены";
-        dropdown.appendChild(noUsersDiv);
-      } else {
+                dropdown.appendChild(noUsersDiv);
+            } else {
         users.forEach((user) => {
           const userDiv = document.createElement("div");
           userDiv.className = "checklist-user-item";
-          userDiv.textContent = user.fullName || user.username;
-          userDiv.dataset.userId = user.id;
-          userDiv.dataset.userName = user.fullName || user.username;
+                    userDiv.textContent = user.fullName || user.username;
+                    userDiv.dataset.userId = user.id;
+                    userDiv.dataset.userName = user.fullName || user.username; 
           userDiv.addEventListener("click", () => {
             const currentItemId = itemId;
             console.log(
@@ -4466,39 +4465,39 @@ function setupChecklistItemActionButtons(
               }`
             );
 
-            if (itemElement.dataset.itemId !== currentItemId) {
+                        if (itemElement.dataset.itemId !== currentItemId) {
               console.error(
                 `[UserDiv Click] MISMATCH: DOM element data-id (${itemElement.dataset.itemId}) !== currentItemId from closure (${currentItemId}). This is a problem!`
               );
-            }
+                        }
 
-            const boardData = JSON.parse(currentBoardData.boardData);
-            const task = findTaskById(boardData, taskId);
+                        const boardData = JSON.parse(currentBoardData.boardData);
+                        const task = findTaskById(boardData, taskId);
             const checklist = task?.checklists.find(
               (cl) => cl.id === checklistId
             );
 
-            if (!checklist) {
+                        if (!checklist) {
               console.error(
                 "[UserDiv Click] Checklist not found in data for ID:",
                 checklistId
               );
-              closeAllChecklistItemPopups();
-              return;
-            }
-
+                            closeAllChecklistItemPopups();
+                            return;
+                        }
+                        
             const itemToUpdate = checklist.items.find(
               (i) => i.id === currentItemId
             );
-
-            if (itemToUpdate) {
+                        
+                        if (itemToUpdate) {
               console.log(
                 `[UserDiv Click] Item ${currentItemId} FOUND in data. Current assignedUsers:`,
                 JSON.stringify(itemToUpdate.assignedUsers)
               );
-              if (!itemToUpdate.assignedUsers) {
-                itemToUpdate.assignedUsers = [];
-              }
+                            if (!itemToUpdate.assignedUsers) {
+                                itemToUpdate.assignedUsers = [];
+                            }
               if (!itemToUpdate.assignedUsers.find((u) => u.id === user.id)) {
                 itemToUpdate.assignedUsers.push({
                   id: user.id,
@@ -4508,19 +4507,19 @@ function setupChecklistItemActionButtons(
                   `[UserDiv Click] User ${user.id} pushed. Item's assignedUsers NOW:`,
                   JSON.stringify(itemToUpdate.assignedUsers)
                 );
-
-                updateBoardData(boardData);
+                                
+                                updateBoardData(boardData); 
                 updateUserCardHighlight(taskId);
-
+                                
                 const freshItemElement = document.querySelector(
                   `.checklist-item[data-item-id="${currentItemId}"]`
                 );
-
-                if (freshItemElement) {
+                                
+                                if (freshItemElement) {
                   console.log(
                     `[UserDiv Click] Calling renderAssignedUsersForChecklistItem for FRESH DOM item with data-id ${freshItemElement.dataset.itemId} (target item id: ${itemToUpdate.id})`
                   );
-                  if (!document.body.contains(freshItemElement)) {
+                                     if (!document.body.contains(freshItemElement)) {
                     console.error(
                       "[UserDiv Click] freshItemElement is DETACHED from DOM before rendering assigned users!",
                       freshItemElement
@@ -4536,44 +4535,44 @@ function setupChecklistItemActionButtons(
                   console.log(
                     `[UserDiv Click] FINISHED renderAssignedUsersForChecklistItem for item ${itemToUpdate.id}`
                   );
-                } else {
+                                } else {
                   console.error(
                     `[UserDiv Click] CRITICAL: freshItemElement with data-item-id '${currentItemId}' NOT FOUND in DOM before rendering assigned users.`
                   );
-                }
-              } else {
+                                }
+                            } else {
                 console.log(
                   `[UserDiv Click] User ${user.id} already assigned to item ${currentItemId}.`
                 );
-              }
-            } else {
+                            }
+                        } else {
               console.error(
                 `[UserDiv Click] CRITICAL: Item with ID '${currentItemId}' NOT FOUND in data. TaskId: ${taskId}, ChecklistId: ${checklistId}. Checklist items in data:`,
                 checklist.items.map((it) => it.id)
               );
+                        }
+                        closeAllChecklistItemPopups();
+                    });
+                    dropdown.appendChild(userDiv);
+                });
             }
-            closeAllChecklistItemPopups();
-          });
-          dropdown.appendChild(userDiv);
-        });
-      }
 
       itemElement
         .querySelector(".checklist-item-actions")
         .appendChild(dropdown);
-      activeChecklistItemUserDropdown = dropdown;
-    });
-  }
+            activeChecklistItemUserDropdown = dropdown;
+        });
+    }
 
-  const boardDataForInitialRender = JSON.parse(currentBoardData.boardData);
-  const taskForInitialRender = findTaskById(boardDataForInitialRender, taskId);
+    const boardDataForInitialRender = JSON.parse(currentBoardData.boardData);
+    const taskForInitialRender = findTaskById(boardDataForInitialRender, taskId);
   const checklistForInitialRender = taskForInitialRender?.checklists.find(
     (cl) => cl.id === checklistId
   );
   const itemForInitialRender = checklistForInitialRender?.items.find(
     (i) => i.id === itemId
   );
-  if (itemForInitialRender && itemForInitialRender.assignedUsers) {
+    if (itemForInitialRender && itemForInitialRender.assignedUsers) {
     renderAssignedUsersForChecklistItem(
       itemElement,
       itemForInitialRender.assignedUsers,
@@ -4583,12 +4582,12 @@ function setupChecklistItemActionButtons(
     );
   }
 
-  if (setDueDateBtn) {
-    const newSetDueDateBtn = setDueDateBtn.cloneNode(true);
-    setDueDateBtn.parentNode.replaceChild(newSetDueDateBtn, setDueDateBtn);
-
+    if (setDueDateBtn) {
+        const newSetDueDateBtn = setDueDateBtn.cloneNode(true);
+        setDueDateBtn.parentNode.replaceChild(newSetDueDateBtn, setDueDateBtn);
+        
     newSetDueDateBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+            e.stopPropagation();
       closeAllChecklistItemPopups();
 
       const currentDueDateValue =
@@ -4597,25 +4596,25 @@ function setupChecklistItemActionButtons(
           ?.textContent.split(" ")[1] || "";
 
       let dateForInput = "";
-      if (currentDueDateValue) {
+            if (currentDueDateValue) {
         const parts = currentDueDateValue.split(".");
-        if (parts.length === 3) {
-          dateForInput = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-      }
+                if (parts.length === 3) {
+                    dateForInput = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+            }
 
       const dateInput = document.createElement("input");
       dateInput.type = "date";
       dateInput.className = "checklist-item-date-input";
-      dateInput.value = dateForInput;
-
+            dateInput.value = dateForInput;
+            
       newSetDueDateBtn.style.display = "none";
 
       newSetDueDateBtn.parentNode.insertBefore(
         dateInput,
         newSetDueDateBtn.nextSibling
       );
-      dateInput.focus();
+            dateInput.focus();
 
       activeChecklistItemDateInput = {
         input: dateInput,
@@ -4625,23 +4624,23 @@ function setupChecklistItemActionButtons(
         itemId,
       };
 
-      const saveDueDate = () => {
+            const saveDueDate = () => {
         if (
           activeChecklistItemDateInput &&
           activeChecklistItemDateInput.input === dateInput
         ) {
-          const newDueDate = dateInput.value;
+                    const newDueDate = dateInput.value; 
 
-          const boardData = JSON.parse(currentBoardData.boardData);
-          const task = findTaskById(boardData, taskId);
+                    const boardData = JSON.parse(currentBoardData.boardData);
+                    const task = findTaskById(boardData, taskId);
           const checklist = task?.checklists.find(
             (cl) => cl.id === checklistId
           );
           const item = checklist?.items.find((i) => i.id === itemId);
 
-          if (item) {
-            item.dueDate = newDueDate ? newDueDate : null;
-            updateBoardData(boardData);
+                    if (item) {
+                        item.dueDate = newDueDate ? newDueDate : null; 
+                        updateBoardData(boardData);
 
             const metaContainer = itemElement.querySelector(
               ".checklist-item-meta"
@@ -4649,13 +4648,13 @@ function setupChecklistItemActionButtons(
             let dueDateDisplay = metaContainer.querySelector(
               ".checklist-item-duedate"
             );
-            if (newDueDate) {
-              if (!dueDateDisplay) {
+                        if (newDueDate) {
+                            if (!dueDateDisplay) {
                 dueDateDisplay = document.createElement("span");
                 dueDateDisplay.className = "checklist-item-duedate";
-                metaContainer.appendChild(dueDateDisplay);
-              }
-              const displayDate = new Date(newDueDate);
+                                metaContainer.appendChild(dueDateDisplay);
+                            }
+                            const displayDate = new Date(newDueDate);
               const utcDisplayDate = new Date(
                 Date.UTC(
                   displayDate.getFullYear(),
@@ -4669,29 +4668,29 @@ function setupChecklistItemActionButtons(
               dueDateDisplay.title = `Срок: ${utcDisplayDate.toLocaleDateString(
                 "ru-RU"
               )}`;
-            } else if (dueDateDisplay) {
-              dueDateDisplay.remove();
-            }
-          }
-          closeAllChecklistItemPopups();
-        }
-      };
+                        } else if (dueDateDisplay) {
+                            dueDateDisplay.remove();
+                        }
+                    }
+                    closeAllChecklistItemPopups(); 
+                }
+            };
 
       dateInput.addEventListener("blur", () => {
-        setTimeout(saveDueDate, 100);
-      });
+                setTimeout(saveDueDate, 100);
+            });
 
       dateInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
-          event.preventDefault();
-          saveDueDate();
+                    event.preventDefault();
+                    saveDueDate();
         } else if (event.key === "Escape") {
-          event.preventDefault();
-          closeAllChecklistItemPopups();
-        }
-      });
-    });
-  }
+                    event.preventDefault();
+                    closeAllChecklistItemPopups(); 
+                }
+            });
+        });
+    }
 }
 
 function renderAssignedUsersForChecklistItem(
@@ -4707,42 +4706,42 @@ function renderAssignedUsersForChecklistItem(
     }. Users to render:`,
     JSON.stringify(assignedUsers)
   );
-
-  if (!itemElement) {
+    
+    if (!itemElement) {
     console.error(
       `[renderAssignedUsersForChecklistItem] CRITICAL: itemElement is NULL for itemId: ${itemId}. Cannot render.`
     );
-    return;
-  }
-  if (!document.body.contains(itemElement)) {
+        return;
+    }
+    if (!document.body.contains(itemElement)) {
     console.error(
       `[renderAssignedUsersForChecklistItem] itemElement for itemId ${itemId} is DETACHED from DOM. Cannot render.`,
       itemElement
     );
-    return;
-  }
+        return;
+    }
 
   const assignedUsersContainer = itemElement.querySelector(
     ".assigned-users-container"
   );
-  if (!assignedUsersContainer) {
+    if (!assignedUsersContainer) {
     console.error(
       `[renderAssignedUsersForChecklistItem] CRITICAL: .assigned-users-container NOT FOUND within itemElement for itemId: ${itemId}. itemElement innerHTML:`,
       itemElement.innerHTML
     );
-    return;
-  }
+        return;
+    }
 
   assignedUsersContainer.innerHTML = "";
   console.log(
     `[renderAssignedUsersForChecklistItem] Cleared innerHTML of assignedUsersContainer for item ${itemId}`
   );
 
-  if (assignedUsers && assignedUsers.length > 0) {
+    if (assignedUsers && assignedUsers.length > 0) {
     assignedUsers.forEach((user) => {
       const userTag = document.createElement("span");
       userTag.className = "checklist-item-assignee-tag";
-      userTag.dataset.userId = user.id;
+            userTag.dataset.userId = user.id;
       userTag.textContent = `@${user.name}`;
 
       const deleteAssigneeBtn = document.createElement("button");
@@ -4751,17 +4750,17 @@ function renderAssignedUsersForChecklistItem(
       deleteAssigneeBtn.innerHTML = "&times;";
 
       deleteAssigneeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const boardData = JSON.parse(currentBoardData.boardData);
-        const task = findTaskById(boardData, taskId);
+                e.stopPropagation();
+                const boardData = JSON.parse(currentBoardData.boardData);
+                const task = findTaskById(boardData, taskId);
         const checklist = task?.checklists.find((cl) => cl.id === checklistId);
         const item = checklist?.items.find((i) => i.id === itemId);
 
-        if (item && item.assignedUsers) {
+                if (item && item.assignedUsers) {
           item.assignedUsers = item.assignedUsers.filter(
             (u) => u.id !== user.id
           );
-          updateBoardData(boardData);
+                    updateBoardData(boardData);
           renderAssignedUsersForChecklistItem(
             itemElement,
             item.assignedUsers,
@@ -4770,15 +4769,15 @@ function renderAssignedUsersForChecklistItem(
             itemId
           );
           updateUserCardHighlight(taskId);
-        }
-      });
+                }
+            });
 
-      userTag.appendChild(deleteAssigneeBtn);
-      assignedUsersContainer.appendChild(userTag);
-    });
-  }
+            userTag.appendChild(deleteAssigneeBtn);
+            assignedUsersContainer.appendChild(userTag);
+        });
+    }
 }
-
+  
 function positionMentionsDropdown(textarea) {
   if (!mentionsDropdown || !textarea) return;
   const rect = textarea.getBoundingClientRect();
@@ -4831,7 +4830,7 @@ document.addEventListener("click", function (event) {
     const { input, setDueDateBtn, taskId, checklistId, itemId } =
       activeChecklistItemDateInput;
 
-    closeAllChecklistItemPopups();
+     closeAllChecklistItemPopups();
   }
 
   if (mentionsDropdown && mentionsDropdown.style.display === "block") {
@@ -4839,7 +4838,8 @@ document.addEventListener("click", function (event) {
       currentMentionTextarea && currentMentionTextarea.contains(event.target);
     const isClickInsideDropdown = mentionsDropdown.contains(event.target);
     if (!isClickInsideTextarea && !isClickInsideDropdown) {
-      hideMentionsDropdown();
+        hideMentionsDropdown();
     }
   }
 });
+  

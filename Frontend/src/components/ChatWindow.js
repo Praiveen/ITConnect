@@ -142,7 +142,7 @@ const MESSAGE_GROUPING_THRESHOLD_MINUTES = 5;
 
 function renderChatMessages(messages) {
   const messagesContainer = document.getElementById("chat-messages");
-  if (!messagesContainer) return;
+    if (!messagesContainer) return;
 
   messagesContainer.innerHTML = "";
   let lastSenderId = null;
@@ -234,7 +234,7 @@ function handleNewMessage(message) {
 
       const newMessageElement = createMessageElement(message, isContinuation);
       messagesContainer.appendChild(newMessageElement);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
       break;
 
     case "MESSAGE_EDITED":
@@ -320,16 +320,16 @@ async function loadChatHistory(chatId) {
   if (messagesContainer)
     messagesContainer.innerHTML =
       '<div class="chat-loading">Загрузка истории сообщений...</div>';
-
-  if (!currentWorkspaceId || !chatId) {
+    
+    if (!currentWorkspaceId || !chatId) {
     console.error(
       `[LOAD HISTORY ${chatId}] Cannot load history: workspaceId (${currentWorkspaceId}) or chatId (${chatId}) is not defined.`
     );
     if (messagesContainer)
       messagesContainer.innerHTML =
         '<div class="chat-error">Ошибка: ID рабочего пространства или чата не определены.</div>';
-    return;
-  }
+        return;
+    }
 
   console.log(
     `[LOAD HISTORY ${chatId}] Fetching messages for workspace ${currentWorkspaceId}, chat ${chatId}`
@@ -342,7 +342,7 @@ async function loadChatHistory(chatId) {
       50
     );
     console.log(`[LOAD HISTORY ${chatId}] Received historyPage:`, historyPage);
-    if (historyPage && historyPage.content) {
+        if (historyPage && historyPage.content) {
       if (historyPage.content.length > 0) {
         console.log(
           `[LOAD HISTORY ${chatId}] Rendering ${historyPage.content.length} messages from server.`
@@ -360,7 +360,7 @@ async function loadChatHistory(chatId) {
       chatHistoryCache[chatId] = historyPage.content;
       lastChatHistoryFetchTime[chatId] = now;
       console.log(`[LOAD HISTORY ${chatId}] History (or empty array) cached.`);
-    } else {
+        } else {
       console.log(
         `[LOAD HISTORY ${chatId}] historyPage or historyPage.content is null/undefined. Displaying 'empty'.`
       );
@@ -373,8 +373,8 @@ async function loadChatHistory(chatId) {
       console.log(
         `[LOAD HISTORY ${chatId}] Empty array cached due to null/undefined historyPage.content.`
       );
-    }
-  } catch (error) {
+        }
+    } catch (error) {
     console.error(
       `[LOAD HISTORY ${chatId}] Error loading chat history:`,
       error
@@ -390,55 +390,55 @@ function setupChatInput() {
   const messageInput = document.getElementById("chat-message-input");
   const sendMessageButton = document.getElementById("send-chat-message-btn");
 
-  const sendMessageHandler = () => {
-    if (!currentChatId || !messageInput) return;
-    const content = messageInput.value.trim();
-    if (content) {
-      chatService.sendMessage(currentChatId, content);
+    const sendMessageHandler = () => {
+        if (!currentChatId || !messageInput) return;
+        const content = messageInput.value.trim();
+        if (content) {
+            chatService.sendMessage(currentChatId, content);
       messageInput.value = "";
-    }
-  };
+        }
+    };
 
-  if (sendMessageButton) {
+    if (sendMessageButton) {
     sendMessageButton.addEventListener("click", sendMessageHandler);
-  }
-  if (messageInput) {
+    }
+    if (messageInput) {
     messageInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessageHandler();
-      }
-    });
-  }
+                e.preventDefault();
+                sendMessageHandler();
+            }
+        });
+    }
 }
 
 export async function renderChatPage(chatId, workspaceId) {
   console.log(
     `Рендеринг страницы чата: chatId=${chatId}, workspaceId=${workspaceId}`
   );
-  currentChatId = chatId;
-  currentWorkspaceId = workspaceId;
+    currentChatId = chatId;
+    currentWorkspaceId = workspaceId;
 
   const appContainer = document.querySelector(".dashboard-content");
-  if (!appContainer) {
+    if (!appContainer) {
     console.error("Основной контейнер .dashboard-content не найден");
-    return;
-  }
+        return;
+    }
 
-  let chatName = `Чат ${chatId}`;
-  try {
-    if (workspaceId && chatId) {
+    let chatName = `Чат ${chatId}`;
+    try {
+        if (workspaceId && chatId) {
       const chatDetails = await workspaceService.getChatById(
         workspaceId,
         chatId
       );
-      if (chatDetails) chatName = chatDetails.name;
-    }
+             if (chatDetails) chatName = chatDetails.name;
+        }
   } catch (e) {
     console.error("Не удалось получить имя чата", e);
   }
 
-  appContainer.innerHTML = `
+    appContainer.innerHTML = `
         <div class="chat-window-container">
             <div class="chat-header">
                 <h2 id="chat-name-header">${chatName}</h2>
@@ -455,8 +455,8 @@ export async function renderChatPage(chatId, workspaceId) {
 
   if (messageListener && currentChatId && chatService.stompClient) {
     chatService.unsubscribeFromChat(currentChatId, messageListener);
-  }
-  messageListener = handleNewMessage;
+    }
+    messageListener = handleNewMessage;
 
   try {
     await chatService.subscribeToChat(currentChatId, messageListener);
@@ -466,9 +466,9 @@ export async function renderChatPage(chatId, workspaceId) {
       currentChatId
     );
 
-    if (currentWorkspaceId && currentChatId) {
-      await loadChatHistory(currentChatId);
-    } else {
+            if (currentWorkspaceId && currentChatId) {
+                await loadChatHistory(currentChatId); 
+            } else {
       console.error(
         "Не могу загрузить историю чата: currentWorkspaceId или currentChatId не установлены после подписки."
       );
@@ -488,7 +488,7 @@ export async function renderChatPage(chatId, workspaceId) {
         '<div class="chat-error">Не удалось подключиться к чату или загрузить историю.</div>';
   }
 
-  setupChatInput();
+    setupChatInput();
 }
 
 export function cleanupChatPage() {
@@ -498,13 +498,13 @@ export function cleanupChatPage() {
     chatService.stompClient &&
     chatService.stompClient.connected
   ) {
-    chatService.unsubscribeFromChat(currentChatId, messageListener);
+        chatService.unsubscribeFromChat(currentChatId, messageListener);
     console.log("Отписались от чата (STOMP):", currentChatId);
-  }
+    }
 
-  currentChatId = null;
-  currentWorkspaceId = null;
-  messageListener = null;
+    currentChatId = null;
+    currentWorkspaceId = null;
+    messageListener = null;
 
   const messagesContainer = document.getElementById("chat-messages");
   if (messagesContainer) {

@@ -1,0 +1,116 @@
+@startuml
+
+left to right direction
+
+skinparam linetype ortho
+
+skinparam class {
+    BackgroundColor White
+    ArrowColor #2688d4
+    BorderColor #2688d4
+}
+
+package "Core Entities" {
+    class User {
+        -Long id
+        -String firstName
+        -String lastName
+        -String email
+        -String password
+        -String phoneNumber
+        -LocalDateTime createdAt
+        -LocalDateTime updatedAt
+        -Set<Role> roles
+        -Set<WorkspaceMember> workspaceMemberships
+        -List<Notification> notifications
+        -List<ChatMessage> sentMessages
+    }
+}
+
+package "Workspace Management" {
+    class Workspace {
+        -Long id
+        -String name
+        -String description
+        -User owner
+        -LocalDateTime createdAt
+        -LocalDateTime updatedAt
+        -Set<WorkspaceMember> members
+        -List<Kanban> boards
+        -List<Chat> chats
+    }
+
+    class WorkspaceMember {
+        -Long id
+        -User user
+        -Workspace workspace
+        -WorkspaceRole role
+        -LocalDateTime joinedAt
+    }
+
+    class WorkspaceRole {
+        -Long id
+        -String name
+        -String description
+    }
+}
+
+package "Kanban & Communication" {
+    class Kanban {
+        -Long id
+        -String name
+        -String boardData
+        -Workspace workspace
+        -LocalDateTime createdAt
+        -LocalDateTime updatedAt
+    }
+
+    class Chat {
+        -Long id
+        -String name
+        -String description
+        -Workspace workspace
+        -List<ChatMessage> messages
+    }
+
+    class ChatMessage {
+        -Long id
+        -Chat chat
+        -User sender
+        -String content
+        -LocalDateTime sentAt
+        -LocalDateTime editedAt
+        -List<Long> readByUsersIds
+    }
+}
+
+package "Notifications" {
+    class Notification {
+        -Long id
+        -String title
+        -String message
+        -String type
+        -User sender
+        -User receiver
+        -Workspace workspace
+        -LocalDateTime sendDate
+        -Boolean isCompleted
+    }
+}
+
+' --- Связи между классами ---
+User "1" o-- "*" WorkspaceMember
+User "1" o-- "*" ChatMessage
+
+Workspace "1" o-- "*" WorkspaceMember
+Workspace "1" o-- "*" Chat
+WorkspaceMember "*" o-- "1" WorkspaceRole
+
+Kanban "*" o-- "1" Workspace
+Chat "1" o-- "*" ChatMessage
+
+Notification "*" o-- "1" User
+Notification "1" --o "*" User
+Notification "*" o-- "1" Workspace
+
+@enduml

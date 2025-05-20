@@ -27,7 +27,7 @@ export const WORKSPACE_DETAIL_TABS = {
 
 function formatDate(dateString) {
   if (!dateString) return "";
-
+  
   const date = new Date(dateString);
   return date.toLocaleDateString("ru-RU", {
     year: "numeric",
@@ -40,28 +40,28 @@ const workspaceCache = {
   data: {},
   timestamp: {},
   CACHE_TIMEOUT: 30 * 1000,
-
+  
   get(workspaceId) {
     const cacheEntry = this.data[workspaceId];
     const cacheTime = this.timestamp[workspaceId] || 0;
     const now = Date.now();
-
+    
     if (cacheEntry && now - cacheTime < this.CACHE_TIMEOUT) {
       console.log(
         `Используем кэшированные данные для рабочего пространства ${workspaceId}`
       );
       return cacheEntry;
     }
-
+    
     return null;
   },
-
+  
   set(workspaceId, data) {
     this.data[workspaceId] = data;
     this.timestamp[workspaceId] = Date.now();
     console.log(`Данные рабочего пространства ${workspaceId} сохранены в кэш`);
   },
-
+  
   clear(workspaceId) {
     if (workspaceId) {
       delete this.data[workspaceId];
@@ -77,11 +77,11 @@ const workspaceCache = {
 
 export async function renderWorkspaceContent(tabType) {
   let contentHtml = "";
-
+  
   try {
     let workspaces = [];
     let invitations = [];
-
+    
     try {
       invitations = (await notificationService.getWorkspaceInvitations()) || [];
       console.log("Получены приглашения:", invitations.length);
@@ -89,12 +89,12 @@ export async function renderWorkspaceContent(tabType) {
       console.error("Ошибка при получении приглашений:", invitationError);
       invitations = [];
     }
-
+    
     const hasInvitations = invitations && invitations.length > 0;
     const invitationsHtml = hasInvitations
       ? renderInvitationsList(invitations)
       : "";
-
+    
     try {
       switch (tabType) {
         case WORKSPACE_TABS.ALL:
@@ -116,7 +116,7 @@ export async function renderWorkspaceContent(tabType) {
             </div>
           `;
           break;
-
+          
         case WORKSPACE_TABS.MY:
           workspaces = (await workspaceService.getAllWorkspaces()) || [];
           console.log(
@@ -130,7 +130,7 @@ export async function renderWorkspaceContent(tabType) {
 
           const myWorkspaces = Array.isArray(workspaces)
             ? workspaces.filter((ws) => {
-                if (!ws) return false;
+            if (!ws) return false;
                 return (
                   ws.owner === true || ws.owner === "true" || ws.owner == true
                 );
@@ -141,7 +141,7 @@ export async function renderWorkspaceContent(tabType) {
             "Отфильтрованы мои рабочие пространства:",
             myWorkspaces.length
           );
-
+          
           contentHtml = `
             <div class="workspace-content">
               <h2>Мои рабочие пространства</h2>
@@ -158,7 +158,7 @@ export async function renderWorkspaceContent(tabType) {
             </div>
           `;
           break;
-
+          
         case WORKSPACE_TABS.SHARED:
           workspaces = (await workspaceService.getAllWorkspaces()) || [];
           console.log(
@@ -172,7 +172,7 @@ export async function renderWorkspaceContent(tabType) {
 
           const sharedWorkspaces = Array.isArray(workspaces)
             ? workspaces.filter((ws) => {
-                if (!ws) return false;
+            if (!ws) return false;
                 return (
                   ws.owner === false ||
                   ws.owner === "false" ||
@@ -185,7 +185,7 @@ export async function renderWorkspaceContent(tabType) {
             "Отфильтрованы совместные рабочие пространства:",
             sharedWorkspaces.length
           );
-
+          
           contentHtml = `
             <div class="workspace-content">
               <h2>Совместные рабочие пространства</h2>
@@ -197,7 +197,7 @@ export async function renderWorkspaceContent(tabType) {
             </div>
           `;
           break;
-
+          
         default:
           contentHtml = `
             <div class="workspace-content">
@@ -219,7 +219,7 @@ export async function renderWorkspaceContent(tabType) {
         invitationsHtml
       );
     }
-
+    
     return contentHtml;
   } catch (error) {
     console.error(
@@ -302,7 +302,7 @@ export function renderWorkspaceList(workspaces) {
   if (!workspaces || !Array.isArray(workspaces) || workspaces.length === 0) {
     return `<div class="workspace-empty">Нет доступных рабочих пространств</div>`;
   }
-
+  
   return workspaces
     .map(
       (workspace) => `
@@ -338,7 +338,7 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
       }
     });
   });
-
+  
   document.querySelectorAll(".accept-invitation-btn").forEach((button) => {
     button.addEventListener("click", async function () {
       const invitationId = this.dataset.invitationId;
@@ -346,14 +346,14 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
         console.error("ID приглашения не найден в элементе кнопки");
         return;
       }
-
+      
       try {
         button.disabled = true;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Принятие...';
-
+        
         console.log(`Принятие приглашения ${invitationId}...`);
         const success = await acceptInvitation(invitationId);
-
+        
         if (success) {
           const invitationElement = button.closest(".invitation-item");
           if (invitationElement) {
@@ -365,9 +365,9 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
               </div>
             `;
           }
-
+          
           workspaceCache.clear();
-
+          
           setTimeout(() => {
             if (typeof navigateCallback === "function") {
               navigateCallback();
@@ -385,7 +385,7 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
       }
     });
   });
-
+  
   document.querySelectorAll(".decline-invitation-btn").forEach((button) => {
     button.addEventListener("click", async function () {
       const invitationId = this.dataset.invitationId;
@@ -393,15 +393,15 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
         console.error("ID приглашения не найден в элементе кнопки");
         return;
       }
-
+      
       try {
         button.disabled = true;
         button.innerHTML =
           '<i class="fas fa-spinner fa-spin"></i> Отклонение...';
-
+        
         console.log(`Отклонение приглашения ${invitationId}...`);
         const success = await declineInvitation(invitationId);
-
+        
         if (success) {
           const invitationElement = button.closest(".invitation-item");
           if (invitationElement) {
@@ -413,7 +413,7 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
               </div>
             `;
           }
-
+          
           setTimeout(() => {
             if (typeof navigateCallback === "function") {
               navigateCallback();
@@ -434,7 +434,7 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
 export async function createNewWorkspace() {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -459,13 +459,13 @@ export async function createNewWorkspace() {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -473,33 +473,33 @@ export async function createNewWorkspace() {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const submitCreate = async () => {
       const name = document.getElementById("workspaceName").value.trim();
       const description = document
         .getElementById("workspaceDescription")
         .value.trim();
-
+      
       if (!name) {
         showWarningToast("Пожалуйста, введите название рабочего пространства");
         return;
       }
-
-      try {
-        const workspaceData = {
+  
+  try {
+    const workspaceData = {
           name: name,
           description: description,
-        };
-
+    };
+    
         const newWorkspace = await workspaceService.createWorkspace(
           workspaceData
         );
-
+        
         showSuccessToast(`Рабочее пространство "${name}" успешно создано`);
         closeModal();
-        navigateToWorkspace(newWorkspace.id);
+    navigateToWorkspace(newWorkspace.id);
         resolve(true);
-      } catch (error) {
+  } catch (error) {
         console.error("Ошибка при создании рабочего пространства:", error);
         showErrorToast(
           `Не удалось создать рабочее пространство: ${
@@ -510,28 +510,28 @@ export async function createNewWorkspace() {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("cancelCreate").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document
       .getElementById("submitCreate")
       .addEventListener("click", submitCreate);
-
+    
     document
       .getElementById("createWorkspaceForm")
       .addEventListener("submit", (e) => {
-        e.preventDefault();
-        submitCreate();
-      });
-
+      e.preventDefault();
+      submitCreate();
+    });
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -550,15 +550,15 @@ export async function acceptInvitation(invitationId) {
     console.error("Невозможно принять приглашение: не указан ID приглашения");
     return false;
   }
-
+  
   try {
     console.log(`Принятие приглашения с ID ${invitationId}...`);
     await notificationService.acceptWorkspaceInvitation(invitationId);
-
+    
     await notificationService.markAsRead(invitationId);
-
+    
     workspaceCache.clear();
-
+    
     return true;
   } catch (error) {
     console.error(`Ошибка при принятии приглашения ${invitationId}:`, error);
@@ -571,13 +571,13 @@ export async function declineInvitation(invitationId) {
     console.error("Невозможно отклонить приглашение: не указан ID приглашения");
     return false;
   }
-
+  
   try {
     console.log(`Отклонение приглашения с ID ${invitationId}...`);
     await notificationService.declineWorkspaceInvitation(invitationId);
-
+    
     await notificationService.markAsRead(invitationId);
-
+    
     return true;
   } catch (error) {
     console.error(`Ошибка при отклонении приглашения ${invitationId}:`, error);
@@ -593,32 +593,32 @@ export async function loadWorkspaceMembers(workspaceId) {
     );
     return;
   }
-
+  
   const membersContainer = document.getElementById("workspaceMembers");
-
+  
   if (!membersContainer) {
     console.error(
       "Не найден контейнер для отображения участников: #workspaceMembers"
     );
     return;
   }
-
+  
   try {
     console.log(`Загрузка участников рабочего пространства ${workspaceId}...`);
-
+    
     membersContainer.innerHTML =
       '<div class="workspace-loading">Загрузка участников...</div>';
-
+    
     let workspace = workspaceCache.get(workspaceId);
-
+    
     if (!workspace) {
       console.log(
         `Данные рабочего пространства ${workspaceId} не найдены в кэше, загружаем с сервера`
       );
-
+      
       try {
         workspace = await workspaceService.getWorkspace(workspaceId);
-
+        
         if (workspace) {
           workspaceCache.set(workspaceId, workspace);
         }
@@ -638,9 +638,9 @@ export async function loadWorkspaceMembers(workspaceId) {
         return;
       }
     }
-
+    
     console.log("Полученные данные рабочего пространства:", workspace);
-
+    
     if (!workspace) {
       console.error(
         `Не удалось загрузить рабочее пространство ${workspaceId}. Возможно, у вас нет доступа.`
@@ -653,10 +653,10 @@ export async function loadWorkspaceMembers(workspaceId) {
       `;
       return;
     }
-
+    
     const members = workspace.members || [];
     console.log("Участники рабочего пространства:", members);
-
+    
     if (members.length > 0) {
       console.log("Первый участник:", members[0]);
       console.log("Ключи первого участника:", Object.keys(members[0]));
@@ -670,7 +670,7 @@ export async function loadWorkspaceMembers(workspaceId) {
     );
 
     renderMembers(validMembers, workspace, membersContainer);
-
+    
     setupWorkspaceDetailEventListeners(workspace);
   } catch (error) {
     console.error(
@@ -690,7 +690,7 @@ export async function loadWorkspaceMembers(workspaceId) {
 
 export async function loadWorkspaceBoards(workspaceId) {
   const boardsContainer = document.getElementById("workspaceBoards");
-
+  
   if (!boardsContainer) {
     console.error(
       "Не найден контейнер для отображения досок: #workspaceBoards"
@@ -703,13 +703,13 @@ export async function loadWorkspaceBoards(workspaceId) {
     boardsContainer.innerHTML = `<div class="workspace-empty">Не указан ID рабочего пространства</div>`;
     return;
   }
-
+  
   try {
     console.log(`Загрузка досок для рабочего пространства ${workspaceId}...`);
-
+    
     boardsContainer.innerHTML =
       '<div class="workspace-loading">Загрузка досок...</div>';
-
+    
     const boards = await getWorkspaceBoards(workspaceId);
     console.log(
       `Получено ${
@@ -717,13 +717,13 @@ export async function loadWorkspaceBoards(workspaceId) {
       } досок для рабочего пространства ${workspaceId}:`,
       boards
     );
-
+    
     if (!boards || !Array.isArray(boards) || boards.length === 0) {
       console.log(`Доски не найдены для рабочего пространства ${workspaceId}`);
       boardsContainer.innerHTML = `<div class="workspace-empty">Нет досок в этом рабочем пространстве</div>`;
       return;
     }
-
+    
     renderBoards(boards, boardsContainer, workspaceId);
   } catch (error) {
     console.error(
@@ -744,30 +744,30 @@ export async function loadWorkspaceBoards(workspaceId) {
 export async function getWorkspaceBoards(workspaceId) {
   try {
     console.log(`Запрос досок для рабочего пространства ${workspaceId}...`);
-
+    
     const kanbanService = await import("../services/kanban-service.js").then(
       (module) => module.kanbanService
     );
-
+    
     const allBoards = await kanbanService.getBoards();
     console.log(
       `Получено всего ${allBoards ? allBoards.length : 0} досок пользователя`
     );
-
+    
     if (!allBoards || !Array.isArray(allBoards)) {
       console.error("Получен некорректный список досок:", allBoards);
       return [];
     }
-
+    
     const workspaceBoards = allBoards.filter((board) => {
       if (!board) return false;
       return String(board.workspaceId) === String(workspaceId);
     });
-
+    
     console.log(
       `Отфильтровано ${workspaceBoards.length} досок для рабочего пространства ${workspaceId}`
     );
-
+    
     return workspaceBoards;
   } catch (error) {
     console.error(
@@ -810,14 +810,14 @@ function renderBoards(boards, container, workspaceId) {
         }" data-board-name="${
         board.name || "Без названия"
       }" title="Удалить доску">Удалить</button>
-      </div>
+    </div>
     </div>
   `
     )
     .join("");
-
+  
   container.innerHTML = boardsHtml;
-
+  
   console.log(
     `HTML сгенерирован и добавлен в контейнер, настраиваем обработчики событий для досок`
   );
@@ -857,7 +857,7 @@ function renderBoards(boards, container, workspaceId) {
       });
     }
   });
-
+  
   console.log(`Обработчики событий для досок настроены`);
 }
 
@@ -888,7 +888,7 @@ export function navigateToBoard(boardId) {
 export async function removeMember(workspaceId, userId, userName) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -908,13 +908,13 @@ export async function removeMember(workspaceId, userId, userName) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -922,20 +922,20 @@ export async function removeMember(workspaceId, userId, userName) {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const confirmRemove = async () => {
-      try {
-        const numericUserId = Number(userId) || userId;
-        await workspaceService.removeMember(workspaceId, numericUserId);
+  try {
+    const numericUserId = Number(userId) || userId;
+    await workspaceService.removeMember(workspaceId, numericUserId);
         showSuccessToast(
           `Пользователь ${userName} успешно удален из рабочего пространства`
         );
-
+        
         workspaceCache.clear(workspaceId);
-
+        
         closeModal();
         resolve(true);
-      } catch (error) {
+  } catch (error) {
         console.error(
           `Ошибка при удалении участника ${userId} из рабочего пространства ${workspaceId}:`,
           error
@@ -949,21 +949,21 @@ export async function removeMember(workspaceId, userId, userName) {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("cancelRemove").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document
       .getElementById("confirmRemove")
       .addEventListener("click", confirmRemove);
-
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -977,20 +977,20 @@ export function setupWorkspaceDetailEventListeners(workspace) {
   console.log(
     `Установка обработчиков событий для рабочего пространства ${workspace.id}`
   );
-
+  
   const userRole = workspace.role || "";
   const isOwner = workspace.owner === true;
   const isAdmin = userRole === "ADMIN";
   const hasEditRights = isOwner || isAdmin;
-
+  
   console.log(
     `Права пользователя: владелец = ${isOwner}, админ = ${isAdmin}, роль = ${userRole}`
   );
 
   const editBtns = document.querySelectorAll(".workspace-edit-btn");
   editBtns.forEach((editBtn) => {
-    if (editBtn) {
-      if (hasEditRights) {
+  if (editBtn) {
+    if (hasEditRights) {
         console.log(
           "Найдена кнопка редактирования рабочего пространства - права есть"
         );
@@ -998,41 +998,41 @@ export function setupWorkspaceDetailEventListeners(workspace) {
           console.log(
             `Нажата кнопка редактирования для рабочего пространства ${workspace.id}`
           );
-          editWorkspace(workspace);
-        });
-      } else {
+        editWorkspace(workspace);
+      });
+    } else {
         console.log(
           "Найдена кнопка редактирования рабочего пространства - прав нет, скрываем"
         );
         editBtn.style.display = "none";
-      }
     }
+  }
   });
-
+  
   const inviteBtns = document.querySelectorAll(".workspace-invite-btn");
   inviteBtns.forEach((inviteBtn) => {
-    if (inviteBtn) {
-      if (hasEditRights) {
+  if (inviteBtn) {
+    if (hasEditRights) {
         console.log("Найдена кнопка приглашения пользователя - права есть");
         inviteBtn.addEventListener("click", async () => {
           console.log(
             `Нажата кнопка приглашения для рабочего пространства ${workspace.id}`
           );
           const success = await inviteUserToWorkspace(workspace.id);
-
+          
           if (success) {
             loadWorkspaceMembers(workspace.id);
           }
-        });
-      } else {
+      });
+    } else {
         console.log(
           "Найдена кнопка приглашения пользователя - прав нет, скрываем"
         );
         inviteBtn.style.display = "none";
-      }
     }
+  }
   });
-
+  
   const addBoardBtn = document.querySelector(".workspace-add-board-btn");
   if (addBoardBtn) {
     if (userRole !== "VIEWER") {
@@ -1057,7 +1057,7 @@ export function setupWorkspaceDetailEventListeners(workspace) {
 export async function editWorkspace(workspace) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -1086,13 +1086,13 @@ export async function editWorkspace(workspace) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -1100,20 +1100,20 @@ export async function editWorkspace(workspace) {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const submitEdit = async () => {
       const name = document.getElementById("workspaceName").value.trim();
       const description = document
         .getElementById("workspaceDescription")
         .value.trim();
-
+      
       if (!name) {
         showWarningToast("Пожалуйста, введите название рабочего пространства");
         return;
       }
-
-      try {
-        const workspaceData = {
+  
+  try {
+    const workspaceData = {
           name: name,
           description: description,
         };
@@ -1123,23 +1123,23 @@ export async function editWorkspace(workspace) {
           workspaceData
         );
 
-        workspaceCache.clear(workspace.id);
-
-        if (updatedWorkspace) {
-          workspaceCache.set(workspace.id, updatedWorkspace);
-
+    workspaceCache.clear(workspace.id);
+    
+    if (updatedWorkspace) {
+      workspaceCache.set(workspace.id, updatedWorkspace);
+      
           const workspaceNameElem = document.querySelector(
             ".workspace-detail-header h2"
           );
           const workspaceDescElem = document.querySelector(
             ".workspace-description"
           );
-
-          if (workspaceNameElem) {
-            workspaceNameElem.textContent = updatedWorkspace.name;
-          }
-
-          if (workspaceDescElem) {
+      
+      if (workspaceNameElem) {
+        workspaceNameElem.textContent = updatedWorkspace.name;
+      }
+      
+      if (workspaceDescElem) {
             workspaceDescElem.textContent =
               updatedWorkspace.description || "Нет описания";
           }
@@ -1148,13 +1148,13 @@ export async function editWorkspace(workspace) {
             "Рабочее пространство успешно обновлено без перезагрузки страницы"
           );
           showSuccessToast("Рабочее пространство успешно обновлено");
-        } else {
-          window.location.reload();
-        }
-
+    } else {
+      window.location.reload();
+    }
+        
         closeModal();
         resolve(true);
-      } catch (error) {
+  } catch (error) {
         console.error(
           `Ошибка при обновлении рабочего пространства ${workspace.id}:`,
           error
@@ -1168,26 +1168,26 @@ export async function editWorkspace(workspace) {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("cancelEdit").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("submitEdit").addEventListener("click", submitEdit);
-
+    
     document
       .getElementById("editWorkspaceForm")
       .addEventListener("submit", (e) => {
-        e.preventDefault();
-        submitEdit();
-      });
-
+      e.preventDefault();
+      submitEdit();
+    });
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -1200,7 +1200,7 @@ export async function editWorkspace(workspace) {
 export async function inviteUserToWorkspace(workspaceId) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -1229,13 +1229,13 @@ export async function inviteUserToWorkspace(workspaceId) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -1243,23 +1243,23 @@ export async function inviteUserToWorkspace(workspaceId) {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const submitInvite = async () => {
       const email = document.getElementById("email").value.trim();
       const role = document.getElementById("role").value;
-
+      
       if (!email) {
         showWarningToast("Пожалуйста, введите email пользователя");
         return;
       }
-
+      
       try {
         const userData = { email, role };
-        await workspaceService.inviteUser(workspaceId, userData);
+    await workspaceService.inviteUser(workspaceId, userData);
         closeModal();
         showSuccessToast(`Приглашение отправлено на email ${email}`);
         resolve(true);
-      } catch (error) {
+  } catch (error) {
         console.error(
           `Ошибка при приглашении пользователя в рабочее пространство ${workspaceId}:`,
           error
@@ -1272,26 +1272,26 @@ export async function inviteUserToWorkspace(workspaceId) {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("cancelInvite").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document
       .getElementById("submitInvite")
       .addEventListener("click", submitInvite);
-
+    
     document.getElementById("inviteForm").addEventListener("submit", (e) => {
       e.preventDefault();
       submitInvite();
     });
-
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -1304,7 +1304,7 @@ export async function inviteUserToWorkspace(workspaceId) {
 export async function addBoardToWorkspace(workspaceId) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -1325,13 +1325,13 @@ export async function addBoardToWorkspace(workspaceId) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -1339,21 +1339,21 @@ export async function addBoardToWorkspace(workspaceId) {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const submitBoard = async () => {
       const boardName = document.getElementById("boardName").value.trim();
-
+      
       if (!boardName) {
         showWarningToast("Пожалуйста, введите название доски");
         return;
       }
-
-      try {
-        const boardData = {
+  
+  try {
+    const boardData = {
           name: boardName,
-          workspaceId: workspaceId,
-          boardData: JSON.stringify({
-            columns: [
+      workspaceId: workspaceId,
+      boardData: JSON.stringify({
+        columns: [
               { id: "column1", name: "К выполнению", tasks: [] },
               { id: "column2", name: "В процессе", tasks: [] },
               { id: "column3", name: "Готово", tasks: [] },
@@ -1364,15 +1364,15 @@ export async function addBoardToWorkspace(workspaceId) {
         const kanbanService = await import(
           "../services/kanban-service.js"
         ).then((module) => module.kanbanService);
-        const newBoard = await kanbanService.createBoard(boardData);
-
-        await loadWorkspaceBoards(workspaceId);
-
+    const newBoard = await kanbanService.createBoard(boardData);
+    
+    await loadWorkspaceBoards(workspaceId);
+        
         closeModal();
-
+    
         const modalConfirmOverlay = document.createElement("div");
         modalConfirmOverlay.className = "modal-overlay";
-
+        
         modalConfirmOverlay.innerHTML = `
           <div class="modal-container">
             <div class="modal-header">
@@ -1389,41 +1389,41 @@ export async function addBoardToWorkspace(workspaceId) {
             </div>
           </div>
         `;
-
+        
         document.body.appendChild(modalConfirmOverlay);
-
+        
         setTimeout(() => {
           modalConfirmOverlay.classList.add("active");
         }, 10);
-
+        
         const closeConfirmModal = () => {
           modalConfirmOverlay.classList.remove("active");
           setTimeout(() => {
             document.body.removeChild(modalConfirmOverlay);
           }, 300);
         };
-
+        
         modalConfirmOverlay
           .querySelector(".modal-close")
           .addEventListener("click", () => {
-            closeConfirmModal();
-            showSuccessToast(`Доска "${boardName}" успешно создана`);
-            resolve(true);
-          });
-
+          closeConfirmModal();
+          showSuccessToast(`Доска "${boardName}" успешно создана`);
+          resolve(true);
+        });
+        
         document.getElementById("stayHere").addEventListener("click", () => {
           closeConfirmModal();
           showSuccessToast(`Доска "${boardName}" успешно создана`);
           resolve(true);
         });
-
+        
         document.getElementById("goToBoard").addEventListener("click", () => {
           closeConfirmModal();
 
-          window.location.hash = `/dashboard?board=${newBoard.id}&workspace=${workspaceId}`;
+      window.location.hash = `/dashboard?board=${newBoard.id}&workspace=${workspaceId}`;
           resolve(true);
         });
-
+        
         modalConfirmOverlay.addEventListener("click", (e) => {
           if (e.target === modalConfirmOverlay) {
             closeConfirmModal();
@@ -1431,7 +1431,7 @@ export async function addBoardToWorkspace(workspaceId) {
             resolve(true);
           }
         });
-      } catch (error) {
+  } catch (error) {
         console.error("Ошибка при создании доски:", error);
         showErrorToast(
           `Не удалось создать доску: ${error.message || "Неизвестная ошибка"}`
@@ -1440,28 +1440,28 @@ export async function addBoardToWorkspace(workspaceId) {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("cancelBoard").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document
       .getElementById("submitBoard")
       .addEventListener("click", submitBoard);
-
+    
     document
       .getElementById("createBoardForm")
       .addEventListener("submit", (e) => {
-        e.preventDefault();
-        submitBoard();
-      });
-
+      e.preventDefault();
+      submitBoard();
+    });
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -1490,17 +1490,17 @@ export async function renderWorkspaceDetail(
 
   try {
     console.log(`Загрузка рабочего пространства ${workspaceId}...`);
-
+    
     let workspace = workspaceCache.get(workspaceId);
-
+    
     if (!workspace) {
       console.log(
         `Данные рабочего пространства ${workspaceId} не найдены в кэше, загружаем с сервера`
       );
-
+      
       try {
         workspace = await workspaceService.getWorkspace(workspaceId);
-
+        
         if (workspace) {
           workspaceCache.set(workspaceId, workspace);
         }
@@ -1539,7 +1539,7 @@ export async function renderWorkspaceDetail(
     console.log("Полученные данные рабочего пространства:", workspace);
 
     const tabContent = await renderWorkspaceTabContent(workspace, activeTab);
-
+    
     return `
       <div class="workspace-detail">
         <div class="workspace-detail-header">
@@ -1737,23 +1737,23 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
     tab.addEventListener("click", () => {
       const tabType = tab.getAttribute("data-tab");
       if (!tabType) return;
-
+      
       console.log(
         `Выбрана вкладка ${tabType} для рабочего пространства ${workspaceId}`
       );
-
+      
       const currentHash = window.location.hash.substring(1);
       const urlParams = new URLSearchParams(
         currentHash.includes("?") ? currentHash.split("?")[1] : ""
       );
-
+      
       urlParams.set("workspace", workspaceId);
       urlParams.set("workspace_detail_tab", tabType);
-
+      
       window.location.hash = `/dashboard?${urlParams.toString()}`;
     });
   });
-
+  
   const deleteBtn = document.querySelector(".delete-workspace-btn");
   if (deleteBtn) {
     deleteBtn.addEventListener("click", async () => {
@@ -1762,11 +1762,11 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
         alert("Не удалось получить данные рабочего пространства");
         return;
       }
-
+      
       deleteWorkspace(workspace);
     });
   }
-
+  
   const editBtn = document.querySelector(".workspace-edit-btn");
   if (editBtn) {
     editBtn.addEventListener("click", async () => {
@@ -1775,13 +1775,13 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
         alert("Не удалось получить данные рабочего пространства");
         return;
       }
-
+      
       editWorkspace(workspace);
     });
   }
-
+  
   console.log(`Загрузка данных для вкладки: ${activeTab}`);
-
+  
   if (activeTab === WORKSPACE_DETAIL_TABS.MEMBERS) {
     const membersContainer = document.getElementById("workspaceMembers");
     if (membersContainer) {
@@ -1806,7 +1806,7 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
       console.warn("Контейнер чатов #workspaceChats не найден");
     }
   }
-
+  
   const addBoardBtn = document.querySelector(".workspace-add-board-btn");
   if (addBoardBtn) {
     addBoardBtn.addEventListener("click", () => {
@@ -1825,7 +1825,7 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
 export async function deleteWorkspace(workspace) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container delete-workspace-modal">
       <div class="modal-header">
@@ -1853,13 +1853,13 @@ export async function deleteWorkspace(workspace) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -1867,7 +1867,7 @@ export async function deleteWorkspace(workspace) {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const deleteConfirmInput = document.getElementById("deleteConfirmText");
     const deleteAgreeCheckbox = document.getElementById("deleteAgree");
     const confirmDeleteBtn = document.getElementById("confirmDelete");
@@ -1876,13 +1876,13 @@ export async function deleteWorkspace(workspace) {
       const expectedText = `удалить ${workspace.name}`;
       const isTextCorrect = deleteConfirmInput.value.trim() === expectedText;
       const isChecked = deleteAgreeCheckbox.checked;
-
+      
       confirmDeleteBtn.disabled = !(isTextCorrect && isChecked);
     };
-
+    
     deleteConfirmInput.addEventListener("input", checkDeleteConditions);
     deleteAgreeCheckbox.addEventListener("change", checkDeleteConditions);
-
+    
     const confirmDelete = async () => {
       try {
         await workspaceService.deleteWorkspace(workspace.id);
@@ -1904,19 +1904,19 @@ export async function deleteWorkspace(workspace) {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document.getElementById("cancelDelete").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     confirmDeleteBtn.addEventListener("click", confirmDelete);
-
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -1944,9 +1944,9 @@ function renderMembers(members, workspace, container) {
     container.innerHTML = `<div class="workspace-empty">Нет участников</div>`;
     return;
   }
-
+  
   console.log("Отображение участников:", members);
-
+  
   const membersHtml = `
     <div class="members-filter-container">
       <input type="text" class="members-filter-input" placeholder="Поиск участников" id="membersFilter">
@@ -1962,15 +1962,15 @@ function renderMembers(members, workspace, container) {
       <div class="members-rows-container">
         ${members
           .map((member) => {
-            const displayName = member.fullName || `Пользователь ${member.id}`;
+          const displayName = member.fullName || `Пользователь ${member.id}`;
 
-            const avatarChar = displayName.charAt(0).toUpperCase();
+          const avatarChar = displayName.charAt(0).toUpperCase();
 
             const userEmail = member.email || "Нет данных";
 
-            const roleDisplay = getRoleName(member.role);
-
-            return `
+          const roleDisplay = getRoleName(member.role);
+          
+          return `
             <div class="member-row" data-name="${displayName.toLowerCase()}" data-email="${userEmail.toLowerCase()}">
               <div class="member-col member-avatar-col">
                 <div class="member-avatar">${avatarChar}</div>
@@ -2003,9 +2003,9 @@ function renderMembers(members, workspace, container) {
       </div>
     </div>
   `;
-
+  
   container.innerHTML = membersHtml;
-
+  
   const filterInput = document.getElementById("membersFilter");
   if (filterInput) {
     filterInput.addEventListener("input", function () {
@@ -2015,7 +2015,7 @@ function renderMembers(members, workspace, container) {
       memberRows.forEach((row) => {
         const name = row.getAttribute("data-name");
         const email = row.getAttribute("data-email");
-
+        
         if (name.includes(filterValue) || email.includes(filterValue)) {
           row.style.display = "";
         } else {
@@ -2024,7 +2024,7 @@ function renderMembers(members, workspace, container) {
       });
     });
   }
-
+  
   if (workspace.owner) {
     document.querySelectorAll(".remove-member-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
@@ -2032,13 +2032,13 @@ function renderMembers(members, workspace, container) {
         const userId = btn.getAttribute("data-user-id");
         const userName = btn.getAttribute("data-user-name");
         const success = await removeMember(workspace.id, userId, userName);
-
+        
         if (success) {
           loadWorkspaceMembers(workspace.id);
         }
       });
     });
-
+    
     document.querySelectorAll(".change-role-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -2068,7 +2068,7 @@ export async function changeUserRole(
 ) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -2117,13 +2117,13 @@ export async function changeUserRole(
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   const roleOptions = modalOverlay.querySelectorAll(".role-option");
   roleOptions.forEach((option) => {
     option.addEventListener("click", () => {
@@ -2134,7 +2134,7 @@ export async function changeUserRole(
       option.querySelector('input[type="radio"]').checked = true;
     });
   });
-
+  
   return new Promise((resolve, reject) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -2142,12 +2142,12 @@ export async function changeUserRole(
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const submitRoleChange = async () => {
       const selectedRole = document.querySelector(
         'input[name="role"]:checked'
       ).value;
-
+      
       if (selectedRole === currentRole) {
         showInfoToast(
           `У пользователя ${userName} уже установлена роль "${getRoleName(
@@ -2158,7 +2158,7 @@ export async function changeUserRole(
         resolve(false);
         return;
       }
-
+      
       try {
         await workspaceService.changeUserRole(
           workspaceId,
@@ -2172,7 +2172,7 @@ export async function changeUserRole(
         );
 
         workspaceCache.clear(workspaceId);
-
+        
         closeModal();
         resolve(true);
       } catch (error) {
@@ -2187,23 +2187,23 @@ export async function changeUserRole(
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
     });
-
+    
     document
       .getElementById("cancelRoleChange")
       .addEventListener("click", () => {
-        closeModal();
-        resolve(false);
-      });
-
+      closeModal();
+      resolve(false);
+    });
+    
     document
       .getElementById("submitRoleChange")
       .addEventListener("click", submitRoleChange);
-
+    
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         closeModal();
@@ -2211,7 +2211,7 @@ export async function changeUserRole(
       }
     });
   });
-}
+} 
 
 export async function loadWorkspaceChats(workspaceId) {
   const chatsContainer = document.getElementById("workspaceChats");
@@ -2229,8 +2229,8 @@ export async function loadWorkspaceChats(workspaceId) {
     console.log(`Загрузка чатов для рабочего пространства ${workspaceId}...`);
     chatsContainer.innerHTML =
       '<div class="workspace-loading">Загрузка чатов...</div>';
-
-    const chats = await workspaceService.getWorkspaceChats(workspaceId);
+    
+    const chats = await workspaceService.getWorkspaceChats(workspaceId); 
 
     console.log(
       `Получено ${
@@ -2290,14 +2290,14 @@ function renderChats(chats, container, workspaceId) {
         }" data-chat-name="${
         chat.name || "Без названия"
       }" title="Удалить чат">Удалить</button>
-      </div>
+    </div>
     </div>
   `
     )
     .join("");
-
+  
   container.innerHTML = chatsHtml;
-
+  
   document.querySelectorAll(".workspace-chat-item").forEach((chatItem) => {
     const chatId = chatItem.getAttribute("data-chat-id");
     const currentWorkspaceId = chatItem.getAttribute("data-workspace-id");
@@ -2342,7 +2342,7 @@ function renderChats(chats, container, workspaceId) {
 export async function addChatToWorkspace(workspaceId) {
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "modal-overlay";
-
+  
   modalOverlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
@@ -2367,13 +2367,13 @@ export async function addChatToWorkspace(workspaceId) {
       </div>
     </div>
   `;
-
+  
   document.body.appendChild(modalOverlay);
-
+  
   setTimeout(() => {
     modalOverlay.classList.add("active");
   }, 10);
-
+  
   return new Promise((resolve) => {
     const closeModal = () => {
       modalOverlay.classList.remove("active");
@@ -2381,18 +2381,18 @@ export async function addChatToWorkspace(workspaceId) {
         document.body.removeChild(modalOverlay);
       }, 300);
     };
-
+    
     const submitChat = async () => {
       const chatName = document.getElementById("chatName").value.trim();
       const chatDescription = document
         .getElementById("chatDescription")
         .value.trim();
-
+      
       if (!chatName) {
         showWarningToast("Пожалуйста, введите название чата");
         return;
       }
-
+  
       try {
         const chatData = {
           name: chatName,
@@ -2403,7 +2403,7 @@ export async function addChatToWorkspace(workspaceId) {
           workspaceId,
           chatData
         );
-
+ 
         showSuccessToast(`Чат "${chatName}" успешно создан`);
 
         const overviewChatsContainer =
@@ -2418,7 +2418,7 @@ export async function addChatToWorkspace(workspaceId) {
         invalidateWorkspaceChatsCache(workspaceId);
 
         closeModal();
-
+        
         resolve(true);
       } catch (error) {
         console.error("Ошибка при создании чата:", error);
@@ -2429,7 +2429,7 @@ export async function addChatToWorkspace(workspaceId) {
         resolve(false);
       }
     };
-
+    
     modalOverlay.querySelector(".modal-close").addEventListener("click", () => {
       closeModal();
       resolve(false);
@@ -2486,7 +2486,7 @@ export function navigateToChat(chatId, workspaceId) {
       workspaceId || "не указано"
     }`
   );
-
+  
   const params = new URLSearchParams();
   if (workspaceId) params.set("workspace", workspaceId);
   params.set("chat", chatId);
@@ -2773,3 +2773,4 @@ async function handleDeleteChatClick(chatId, chatName, workspaceId) {
       }
     });
 }
+  

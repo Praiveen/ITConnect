@@ -1,0 +1,59 @@
+@startuml
+actor Пользователь as User
+participant "Веб-клиент" as Frontend
+participant "Чат контроллер" as Controller
+participant "Чат сервис" as Service
+database "База данных" as DB
+
+== Отправка сообщения в чат ==
+
+User -> Frontend : Ввести текст сообщения\nи нажать "Отправить"
+activate Frontend
+
+Frontend -> Controller : Отослать сообщение пользователя
+activate Controller
+
+Controller -> Controller : Проверить данные
+
+alt Данные некорректны
+    Controller --> Frontend : Вернуть ошибку
+else Данные корректны
+    Controller -> Service : Проверить и обработать сообщение
+    activate Service
+
+    Service -> Service : Проверить права пользователя и существование чата
+
+    alt Нет доступа или чата
+        Service --> Controller : Вернуть ошибку
+        Controller --> Frontend : Вернуть ошибку
+    else Всё в порядке
+        Service -> DB : Найти чат по идентификатору
+        activate DB
+        DB -> DB : Найти и вернуть чат
+        DB --> Service : Вернуть чат
+        deactivate DB
+
+        Service -> DB : Записать новое сообщение
+        activate DB
+        DB -> DB : Сохранить сообщение
+        DB --> Service : Вернуть сохранённое сообщение
+        deactivate DB
+
+        Service -> DB : Обновить время изменения чата
+        activate DB
+        DB -> DB : Обновить чат
+        DB --> Service : Подтвердить обновление
+        deactivate DB
+
+        Service --> Controller : Сформировать и вернуть данные сообщения
+    end
+    deactivate Service
+
+    Controller -> Frontend : Отправить новое сообщение в чат
+end
+deactivate Controller
+
+Frontend -> User : Показать новое сообщение
+deactivate Frontend
+
+@enduml

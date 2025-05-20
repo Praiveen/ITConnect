@@ -1,0 +1,41 @@
+@startuml
+actor Инициатор as Initiator
+actor Приглашённый as InviteeUser
+participant "Веб-интерфейс" as Frontend
+participant "Backend (PersonalMeetingRequestViewSet)" as Backend
+participant "MeetingTemplate"
+participant "Notification"
+database "База данных" as DB
+
+== Заполнение и отправка приглашения ==
+Initiator -> Frontend : Вводит:\n- шаблон встречи\n- email приглашённого\n- сообщение
+activate Frontend
+
+Frontend -> Backend : Передаёт:\n- id шаблона\n- email приглашённого\n- сообщение
+activate Backend
+
+Backend -> MeetingTemplate : Проверяет владельца шаблона
+activate MeetingTemplate
+MeetingTemplate --> Backend : Результат проверки
+deactivate MeetingTemplate
+
+Backend -> DB : Ищет пользователя по email
+activate DB
+DB --> Backend : Данные пользователя (InviteeUser)
+deactivate DB
+
+Backend -> DB : Создаёт PersonalMeetingRequest\n(organizer, invitee, template, message, expiryDate)
+Backend -> DB : Создаёт Notification для приглашённого
+
+Backend -> Notification : Формирует уведомление для приглашённого
+activate Notification
+Notification -> InviteeUser : Отправляет уведомление\n(текст приглашения, инициатор, шаблон)
+deactivate Notification
+
+Backend --> Frontend : Возвращает результат:\n- успех/ошибка\n- сообщение для пользователя
+deactivate Backend
+
+Frontend -> Initiator : Показывает результат (успех/ошибка)
+deactivate Frontend
+
+@enduml

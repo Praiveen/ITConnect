@@ -36,7 +36,6 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests((requests) -> requests
                                 .requestMatchers("/login").anonymous()
                                 .requestMatchers("/register").anonymous()
-                                .requestMatchers("/profile").authenticated()
                                 .requestMatchers("/dashboard").authenticated()
                                 .requestMatchers("/css/**", "/java/**").permitAll()
                                 // .requestMatchers("/java/**").authenticated()
