@@ -1,26 +1,26 @@
-import '../css/main.css'
-import viteLogo from '/vite.svg'
-import { authService } from '../services/auth-service.js'
-import { renderHeader, setupHeaderEventListeners } from '../components/Header.js'
-import { renderFooter } from '../components/Footer.js'
+import "../css/main.css";
+import viteLogo from "/vite.svg";
+import { authService } from "../services/auth-service.js";
+import {
+  renderHeader,
+  setupHeaderEventListeners,
+} from "../components/Header.js";
+import { renderFooter } from "../components/Footer.js";
 
-// Функция для рендеринга страницы профиля
 export async function renderProfilePage() {
   try {
-    // Получаем актуальные данные пользователя с сервера
     const userData = await authService.refreshUserData();
-    
+
     if (!userData) {
-      console.error('Не удалось получить данные пользователя');
-      // Если данные не получены, перенаправляем на страницу входа
-      import('./auth.js').then(module => {
+      console.error("Не удалось получить данные пользователя");
+
+      import("./auth.js").then((module) => {
         module.renderLoginPage();
       });
       return;
     }
-    
-    // Рендерим страницу с полученными данными
-    document.querySelector('#app').innerHTML = `
+
+    document.querySelector("#app").innerHTML = `
       <div class="app-container">
         <!-- Header -->
         ${renderHeader()}
@@ -32,33 +32,47 @@ export async function renderProfilePage() {
             
             <div class="profile-info">
               <div class="profile-avatar">
-                <div class="avatar-placeholder">${userData.firstName ? userData.firstName.charAt(0).toUpperCase() : 'U'}</div>
+                <div class="avatar-placeholder">${
+                  userData.firstName
+                    ? userData.firstName.charAt(0).toUpperCase()
+                    : "U"
+                }</div>
               </div>
               
               <div class="profile-details">
                 <div class="profile-item">
                   <span class="profile-label">Имя:</span>
-                  <span class="profile-value">${userData.firstName || 'Не указано'}</span>
+                  <span class="profile-value">${
+                    userData.firstName || "Не указано"
+                  }</span>
                 </div>
 
                 <div class="profile-item">
                   <span class="profile-label">Фамилия:</span>
-                  <span class="profile-value">${userData.lastName || 'Не указано'}</span>
+                  <span class="profile-value">${
+                    userData.lastName || "Не указано"
+                  }</span>
                 </div>
                 
                 <div class="profile-item">
                   <span class="profile-label">Полное имя:</span>
-                  <span class="profile-value">${userData.fullName || 'Не указано'}</span>
+                  <span class="profile-value">${
+                    userData.fullName || "Не указано"
+                  }</span>
                 </div>
                 
                 <div class="profile-item">
                   <span class="profile-label">Email:</span>
-                  <span class="profile-value">${userData.email || 'Не указано'}</span>
+                  <span class="profile-value">${
+                    userData.email || "Не указано"
+                  }</span>
                 </div>
                 
                 <div class="profile-item">
                   <span class="profile-label">Телефон:</span>
-                  <span class="profile-value">${userData.phoneNumber || 'Не указано'}</span>
+                  <span class="profile-value">${
+                    userData.phoneNumber || "Не указано"
+                  }</span>
                 </div>
                 
                 <div class="profile-item">
@@ -70,25 +84,12 @@ export async function renderProfilePage() {
             
             <div class="profile-actions">
               <button class="btn-primary btn-edit-profile">Редактировать профиль</button>
-              <button class="btn-secondary btn-change-password">Изменить пароль</button>
             </div>
           </div>
           
-          <div class="recent-activity">
-            <h3>Недавняя активность</h3>
-            <div class="activity-list">
-              <div class="activity-item">
-                <span class="activity-icon">🚀</span>
-                <div class="activity-details">
-                  <div class="activity-title">Успешный вход в систему</div>
-                  <div class="activity-time">Сегодня, ${new Date().toLocaleTimeString()}</div>
-                </div>
-              </div>
-              <!-- Добавим больше активностей позже -->
-            </div>
-          </div>
+          
         </div>
-
+        
         <!-- Модальное окно для редактирования профиля -->
         <div id="editProfileModal" class="modal">
           <div class="modal-content">
@@ -97,23 +98,33 @@ export async function renderProfilePage() {
             <form id="editProfileForm">
               <div class="form-group">
                 <label for="firstName">Имя</label>
-                <input type="text" id="firstName" value="${userData.firstName || ''}" placeholder="Введите имя">
+                <input type="text" id="firstName" value="${
+                  userData.firstName || ""
+                }" placeholder="Введите имя">
               </div>
               <div class="form-group">
                 <label for="lastName">Фамилия</label>
-                <input type="text" id="lastName" value="${userData.lastName || ''}" placeholder="Введите фамилию">
+                <input type="text" id="lastName" value="${
+                  userData.lastName || ""
+                }" placeholder="Введите фамилию">
               </div>
               <div class="form-group">
                 <label for="fullName">Полное имя</label>
-                <input type="text" id="fullName" value="${userData.fullName || ''}" placeholder="Введите полное имя">
+                <input type="text" id="fullName" value="${
+                  userData.fullName || ""
+                }" placeholder="Введите полное имя">
               </div>
               <div class="form-group">
                 <label for="phoneNumber">Телефон</label>
-                <input type="text" id="phoneNumber" value="${userData.phoneNumber || ''}" placeholder="Введите номер телефона">
+                <input type="text" id="phoneNumber" value="${
+                  userData.phoneNumber || ""
+                }" placeholder="Введите номер телефона">
               </div>
               <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" value="${userData.email || ''}" placeholder="Введите email" disabled>
+                <input type="email" id="email" value="${
+                  userData.email || ""
+                }" placeholder="Введите email" disabled>
                 <small>Email нельзя изменить</small>
               </div>
               <button type="submit" class="btn-primary btn-block">Сохранить изменения</button>
@@ -126,92 +137,77 @@ export async function renderProfilePage() {
       </div>
     `;
 
-    // Добавляем стили для модального окна, если их еще нет
     addModalStyles();
 
-    // Устанавливаем обработчики событий для хедера
     setupHeaderEventListeners();
 
-    // Обработчик для кнопки редактирования профиля
-    const modal = document.getElementById('editProfileModal');
-    const editBtn = document.querySelector('.btn-edit-profile');
-    const closeBtn = document.querySelector('.close-modal');
+    const modal = document.getElementById("editProfileModal");
+    const editBtn = document.querySelector(".btn-edit-profile");
+    const closeBtn = document.querySelector(".close-modal");
 
-    editBtn.addEventListener('click', () => {
-      modal.style.display = 'block';
+    editBtn.addEventListener("click", () => {
+      modal.style.display = "block";
     });
 
-    closeBtn.addEventListener('click', () => {
-      modal.style.display = 'none';
+    closeBtn.addEventListener("click", () => {
+      modal.style.display = "none";
     });
 
-    // Закрываем модальное окно при клике вне его содержимого
-    window.addEventListener('click', (event) => {
+    window.addEventListener("click", (event) => {
       if (event.target === modal) {
-        modal.style.display = 'none';
+        modal.style.display = "none";
       }
     });
 
-    // Обработка отправки формы редактирования профиля
-    document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      // Получаем данные из формы
-      const updatedProfile = {
-        firstName: document.getElementById('firstName').value,
-        lastName: document.getElementById('lastName').value,
-        fullName: document.getElementById('fullName').value,
-        phoneNumber: document.getElementById('phoneNumber').value,
-        email: userData.email // email не меняется
-      };
+    document
+      .getElementById("editProfileForm")
+      .addEventListener("submit", async (e) => {
+        e.preventDefault();
 
-      try {
-        // Показываем индикатор загрузки на кнопке
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        const originalButtonText = submitButton.textContent;
-        submitButton.disabled = true;
-        submitButton.textContent = 'Сохранение...';
-        
-        // Вызываем метод обновления профиля
-        await authService.updateProfile(updatedProfile);
-        
-        // Закрываем модальное окно
-        modal.style.display = 'none';
-        
-        // Обновляем страницу для отображения новых данных с принудительной загрузкой с сервера
-        renderProfilePage();
-      } catch (error) {
-        console.error('Ошибка при обновлении профиля:', error);
-        alert('Не удалось обновить профиль. Попробуйте еще раз позже.');
-        
-        // Возвращаем кнопку в исходное состояние
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        if (submitButton) {
-          submitButton.disabled = false;
-          submitButton.textContent = originalButtonText || 'Сохранить изменения';
+        const updatedProfile = {
+          firstName: document.getElementById("firstName").value,
+          lastName: document.getElementById("lastName").value,
+          fullName: document.getElementById("fullName").value,
+          phoneNumber: document.getElementById("phoneNumber").value,
+          email: userData.email,
+        };
+
+        try {
+          const submitButton = e.target.querySelector('button[type="submit"]');
+          const originalButtonText = submitButton.textContent;
+          submitButton.disabled = true;
+          submitButton.textContent = "Сохранение...";
+
+          await authService.updateProfile(updatedProfile);
+
+          modal.style.display = "none";
+
+          renderProfilePage();
+        } catch (error) {
+          console.error("Ошибка при обновлении профиля:", error);
+          alert("Не удалось обновить профиль. Попробуйте еще раз позже.");
+
+          const submitButton = e.target.querySelector('button[type="submit"]');
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent =
+              originalButtonText || "Сохранить изменения";
+          }
         }
-      }
-    });
-    
-    // Обработчик для кнопки изменения пароля
-    document.querySelector('.btn-change-password').addEventListener('click', () => {
-      alert('Функция изменения пароля будет доступна позже');
-    });
+      });
   } catch (error) {
-    console.error('Ошибка при загрузке профиля:', error);
-    // В случае ошибки перенаправляем на страницу входа
-    import('./auth.js').then(module => {
+    console.error("Ошибка при загрузке профиля:", error);
+
+    import("./auth.js").then((module) => {
       module.renderLoginPage();
     });
   }
 }
 
-// Функция для добавления стилей модального окна
 function addModalStyles() {
-  // Проверяем, существует ли уже стиль для модального окна
-  if (!document.getElementById('modalStyles')) {
-    const style = document.createElement('style');
-    style.id = 'modalStyles';
+  if (!document.getElementById("modalStyles")) {
+    const style = document.createElement("style");
+    style.id = "modalStyles";
     style.innerHTML = `
       .modal {
         display: none;
@@ -274,4 +270,4 @@ function addModalStyles() {
     `;
     document.head.appendChild(style);
   }
-} 
+}

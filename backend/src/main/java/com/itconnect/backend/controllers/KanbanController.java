@@ -19,15 +19,15 @@ import java.util.Map;
 @RestController
 @RequestMapping("/boards")
 public class KanbanController {
-    
+
     private final KanbanService kanbanService;
     private final WorkspaceService workspaceService;
-    
+
     public KanbanController(KanbanService kanbanService, WorkspaceService workspaceService) {
         this.kanbanService = kanbanService;
         this.workspaceService = workspaceService;
     }
-    
+
     /**
      * Получить все доски текущего пользователя из всех рабочих областей
      */
@@ -36,13 +36,13 @@ public class KanbanController {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ResponseDto("Пользователь не авторизован", false));
+                    .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
+
         List<KanbanDto> boards = kanbanService.getAllBoardsByUser(currentUser);
         return ResponseEntity.ok(boards);
     }
-    
+
     /**
      * Получить все доски из конкретной рабочей области
      */
@@ -51,13 +51,13 @@ public class KanbanController {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ResponseDto("Пользователь не авторизован", false));
+                    .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
+
         List<KanbanDto> boards = kanbanService.getAllBoardsByWorkspace(workspaceId, currentUser);
         return ResponseEntity.ok(boards);
     }
-    
+
     /**
      * Получить доску по ID
      */
@@ -66,18 +66,18 @@ public class KanbanController {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ResponseDto("Пользователь не авторизован", false));
+                    .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
+
         KanbanDto board = kanbanService.getBoardById(id, currentUser);
         if (board == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ResponseDto("Доска не найдена или недостаточно прав для доступа", false));
+                    .body(new ResponseDto("Доска не найдена или недостаточно прав для доступа", false));
         }
-        
+
         return ResponseEntity.ok(board);
     }
-    
+
     /**
      * Создать новую доску в рабочей области
      */
@@ -86,85 +86,79 @@ public class KanbanController {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ResponseDto("Пользователь не авторизован", false));
+                    .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
+
         String name = (String) request.get("name");
         String boardData = (String) request.get("boardData");
         Long workspaceId = Long.valueOf(request.get("workspaceId").toString());
-        
+
         if (name == null || name.trim().isEmpty()) {
             return ResponseEntity.badRequest()
-                .body(new ResponseDto("Название доски обязательно", false));
+                    .body(new ResponseDto("Название доски обязательно", false));
         }
-        
+
         if (boardData == null) {
-            boardData = "{}"; // Пустой JSON по умолчанию
+            boardData = "{}";
         }
-        
+
         KanbanDto createdBoard = kanbanService.createBoard(name, boardData, workspaceId, currentUser);
         if (createdBoard == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ResponseDto("Недостаточно прав для создания доски в этой рабочей области", false));
+                    .body(new ResponseDto("Недостаточно прав для создания доски в этой рабочей области", false));
         }
-        
+
         return ResponseEntity.status(HttpStatus.CREATED).body(createdBoard);
     }
-    
+
     /**
      * Обновить существующую доску
      */
     @PutMapping("/{id}")
     public ResponseEntity<?> updateBoard(@PathVariable("id") Long id, @RequestBody KanbanDto boardDto) {
-        System.out.println("ddddddddddddddddd");
-        System.out.println("boardDto: " + boardDto);
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ResponseDto("Пользователь не авторизован", false));
+                    .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
-        if ((boardDto.getName() == null || boardDto.getName().trim().isEmpty()) 
+
+        if ((boardDto.getName() == null || boardDto.getName().trim().isEmpty())
                 && boardDto.getBoardData() == null) {
             return ResponseEntity.badRequest()
-                .body(new ResponseDto("Нет данных для обновления", false));
+                    .body(new ResponseDto("Нет данных для обновления", false));
         }
-        
-        // Получаем текущие данные доски
+
         KanbanDto existingBoard = kanbanService.getBoardById(id, currentUser);
         if (existingBoard == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ResponseDto("Доска не найдена или недостаточно прав для доступа", false));
+                    .body(new ResponseDto("Доска не найдена или недостаточно прав для доступа", false));
         }
-        
-        // Проверяем права на редактирование
+
         if (!existingBoard.isCanEdit()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ResponseDto("Недостаточно прав для редактирования доски", false));
+                    .body(new ResponseDto("Недостаточно прав для редактирования доски", false));
         }
-        
-        // Если какие-то параметры не переданы, оставляем текущие значения
+
         String name = boardDto.getName();
         if (name == null || name.trim().isEmpty()) {
             name = existingBoard.getName();
         }
-        
+
         String boardData = boardDto.getBoardData();
         if (boardData == null) {
             boardData = existingBoard.getBoardData();
         }
         System.out.println("boardData: " + boardData);
-        
+
         KanbanDto updatedBoard = kanbanService.updateBoard(id, name, boardData, currentUser);
-        System.out.println("updatedBoarddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd: " + updatedBoard);
         if (updatedBoard == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ResponseDto("Недостаточно прав для редактирования доски", false));
+                    .body(new ResponseDto("Недостаточно прав для редактирования доски", false));
         }
-        
+
         return ResponseEntity.ok(updatedBoard);
     }
-    
+
     /**
      * Удалить доску
      */
@@ -173,25 +167,24 @@ public class KanbanController {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ResponseDto("Пользователь не авторизован", false));
+                    .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
-        // Проверяем, существует ли доска и есть ли права на чтение
+
         KanbanDto board = kanbanService.getBoardById(id, currentUser);
         if (board == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ResponseDto("Доска не найдена или недостаточно прав для доступа", false));
+                    .body(new ResponseDto("Доска не найдена или недостаточно прав для доступа", false));
         }
-        
+
         boolean deleted = kanbanService.deleteBoard(id, currentUser);
         if (!deleted) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ResponseDto("Недостаточно прав для удаления доски", false));
+                    .body(new ResponseDto("Недостаточно прав для удаления доски", false));
         }
-        
+
         return ResponseEntity.ok(new ResponseDto("Доска успешно удалена", true));
     }
-    
+
     /**
      * Получить текущего аутентифицированного пользователя
      */
@@ -202,4 +195,4 @@ public class KanbanController {
         }
         return null;
     }
-} 
+}

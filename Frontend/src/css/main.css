@@ -1,1 +1,4 @@
 @import './style.css';
+@import './reset.css';
+@import './alert.css';
+@import './chat-styles.css';

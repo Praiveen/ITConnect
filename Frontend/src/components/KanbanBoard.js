@@ -1,111 +1,506 @@
-import { kanbanService } from '../services/kanban-service.js';
-// Импортируем ссылку на кэш досок из DashboardSidebar
-import { getBoardsCache, updateBoardsCache } from './DashboardSidebar.js';
+import { kanbanService } from "../services/kanban-service.js";
+import { getBoardsCache, updateBoardsCache } from "./DashboardSidebar.js";
+import { authService } from "../services/auth-service.js";
+import { workspaceService } from "../services/workspace-service.js";
 
-// Переменная для хранения таймера автосохранения
 let saveTimer = null;
-// Время задержки перед сохранением (15 секунд)
 const SAVE_DELAY = 15000;
-// Текущие данные доски
 let currentBoardData = null;
-// Флаг, указывающий, были ли внесены изменения
 let boardChanged = false;
 
-// Компонент для отображения канбан-доски
-export async function renderKanbanBoard(boardId, preloadedBoardData = null) {
-  let board = preloadedBoardData; // Используем предзагруженные данные, если они есть
-  
-  console.log('Рендеринг канбан-доски с ID:', boardId);
-  if (preloadedBoardData) {
-    console.log('Используем предзагруженные данные для доски:', preloadedBoardData.id);
+let workspaceMembersCache = null;
+let currentWorkspaceIdForCache = null;
+
+function getChecklistStats(task) {
+  let totalChecklistItems = 0;
+  let completedChecklistItems = 0;
+  if (task && task.checklists && task.checklists.length > 0) {
+    task.checklists.forEach((checklist) => {
+      totalChecklistItems += checklist.items.length;
+      checklist.items.forEach((item) => {
+        if (item.completed) {
+          completedChecklistItems++;
+        }
+      });
+    });
   }
-  
-  // Если данные доски не переданы, проверяем в кэше
+  return { totalChecklistItems, completedChecklistItems };
+}
+
+let mentionsDropdown = null;
+let currentMentionTextarea = null;
+let mentionQuery = "";
+let activeMentionIndex = -1;
+let mentionStartIndex = -1;
+
+async function getMentionableUsers(query) {
+  const lowerCaseQuery = query.toLowerCase();
+  let resolvedBoardMembers = [];
+
+  if (
+    currentBoardData &&
+    currentBoardData.members &&
+    currentBoardData.members.length > 0
+  ) {
+    resolvedBoardMembers = currentBoardData.members;
+    console.log("Mentions: Using members from currentBoardData.members");
+  } else if (currentBoardData && currentBoardData.workspaceId) {
+    if (
+      currentBoardData.workspaceId === currentWorkspaceIdForCache &&
+      workspaceMembersCache
+    ) {
+      resolvedBoardMembers = workspaceMembersCache;
+      console.log("Mentions: Using component-level cached workspace members");
+    } else {
+      try {
+        console.log(
+          `Mentions: Fetching members for workspace ${currentBoardData.workspaceId}`
+        );
+        const workspace = await workspaceService.getWorkspace(
+          currentBoardData.workspaceId
+        );
+
+        if (workspace && workspace.members) {
+          resolvedBoardMembers = workspace.members.map((member) => ({
+            id: String(member.id),
+            username: member.fullName
+              ? member.fullName.replace(/\s+/g, "_").toLowerCase()
+              : `user_${member.id}`,
+            fullName: member.fullName || `User ${member.id}`,
+          }));
+
+          workspaceMembersCache = resolvedBoardMembers;
+          currentWorkspaceIdForCache = currentBoardData.workspaceId;
+          console.log(
+            "Mentions: Fetched and mapped workspace members:",
+            resolvedBoardMembers
+          );
+        } else {
+          console.warn(
+            `Mentions: No members found for workspace ${currentBoardData.workspaceId} or workspace data is missing.`
+          );
+          workspaceMembersCache = [];
+          currentWorkspaceIdForCache = currentBoardData.workspaceId;
+          resolvedBoardMembers = [];
+        }
+      } catch (error) {
+        console.error("Mentions: Error fetching workspace members:", error);
+        workspaceMembersCache = [];
+        currentWorkspaceIdForCache = currentBoardData.workspaceId;
+        resolvedBoardMembers = [];
+      }
+    }
+  } else {
+    console.warn(
+      "Mentions: workspaceId not found in currentBoardData or currentBoardData is missing. No users to suggest."
+    );
+    resolvedBoardMembers = [];
+  }
+
+  if (!resolvedBoardMembers || resolvedBoardMembers.length === 0) {
+    return [];
+  }
+
+  return resolvedBoardMembers
+    .filter(
+      (user) =>
+        (user.username &&
+          user.username.toLowerCase().includes(lowerCaseQuery)) ||
+        (user.fullName && user.fullName.toLowerCase().includes(lowerCaseQuery))
+    )
+    .slice(0, 5);
+}
+
+function createMentionsDropdown() {
+  if (!mentionsDropdown) {
+    mentionsDropdown = document.createElement("div");
+    mentionsDropdown.className = "mentions-dropdown";
+    document.body.appendChild(mentionsDropdown);
+  }
+}
+
+async function showMentionsDropdown(query, textarea) {
+  currentMentionTextarea = textarea;
+  const users = await getMentionableUsers(query);
+
+  if (users.length > 0) {
+    createMentionsDropdown();
+    mentionsDropdown.innerHTML = users
+      .map(
+        (user, index) =>
+          `<div class="mention-item" data-index="${index}" data-username="${user.username}" data-fullname="${user.fullName}">
+         <span class="mention-item-fullname">${user.fullName}</span>
+         <span class="mention-item-username">(@${user.username})</span>
+       </div>`
+      )
+      .join("");
+    mentionsDropdown.style.display = "block";
+    positionMentionsDropdown(textarea);
+    activeMentionIndex = -1;
+
+    mentionsDropdown.querySelectorAll(".mention-item").forEach((item) => {
+      item.addEventListener("click", handleMentionItemClick);
+    });
+  } else {
+    hideMentionsDropdown();
+  }
+}
+
+function hideMentionsDropdown() {
+  if (mentionsDropdown) {
+    mentionsDropdown.style.display = "none";
+    mentionsDropdown.innerHTML = "";
+  }
+  currentMentionTextarea = null;
+  mentionQuery = "";
+  activeMentionIndex = -1;
+  mentionStartIndex = -1;
+}
+
+function handleMentionItemClick(event) {
+  const item = event.currentTarget;
+  const username = item.dataset.username;
+  if (username && currentMentionTextarea && mentionStartIndex !== -1) {
+    insertMention(username, currentMentionTextarea);
+  }
+  hideMentionsDropdown();
+}
+
+function insertMention(username, textarea) {
+  const text = textarea.value;
+  const before = text.substring(0, mentionStartIndex);
+  const after = text.substring(textarea.selectionStart);
+
+  textarea.value = before + `@${username} ` + after;
+  textarea.focus();
+  const cursorPos = mentionStartIndex + username.length + 2;
+  textarea.setSelectionRange(cursorPos, cursorPos);
+
+  hideMentionsDropdown();
+}
+
+function handleMentionTextareaInput(event) {
+  const textarea = event.target;
+
+  console.log(
+    `Mentions: Input event on textarea (className: ${textarea.className}, placeholder: "${textarea.placeholder}")`
+  );
+
+  const text = textarea.value;
+  const cursorPos = textarea.selectionStart;
+
+  let atIndex = -1;
+
+  for (let i = cursorPos - 1; i >= 0; i--) {
+    if (text[i] === "@") {
+      if (i === 0 || /\s/.test(text[i - 1])) {
+        atIndex = i;
+        break;
+      }
+    }
+    if (/\s/.test(text[i])) {
+      break;
+    }
+  }
+  console.log(`Mentions: Calculated atIndex: ${atIndex}`);
+
+  if (atIndex !== -1) {
+    const queryPart = text.substring(atIndex + 1, cursorPos);
+    console.log(`Mentions: Calculated queryPart: "${queryPart}"`);
+
+    if (queryPart.includes(" ")) {
+      console.log("Mentions: queryPart contains space. Hiding dropdown.");
+      hideMentionsDropdown();
+      return;
+    }
+    mentionQuery = queryPart;
+    mentionStartIndex = atIndex;
+    console.log(
+      `Mentions: Attempting to show dropdown for query "${mentionQuery}" on textarea (className: ${textarea.className})`
+    );
+    showMentionsDropdown(mentionQuery, textarea);
+  } else {
+    console.log(
+      "Mentions: '@' not found or not at a valid start position. Hiding dropdown."
+    );
+    hideMentionsDropdown();
+  }
+}
+
+function handleMentionTextareaKeydown(event) {
+  if (!mentionsDropdown || mentionsDropdown.style.display === "none") {
+    return;
+  }
+
+  const items = mentionsDropdown.querySelectorAll(".mention-item");
+  if (items.length === 0) return;
+
+  switch (event.key) {
+    case "ArrowDown":
+      event.preventDefault();
+      activeMentionIndex = (activeMentionIndex + 1) % items.length;
+      updateMentionHighlight(items);
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      activeMentionIndex =
+        (activeMentionIndex - 1 + items.length) % items.length;
+      updateMentionHighlight(items);
+      break;
+    case "Enter":
+      event.preventDefault();
+      if (activeMentionIndex > -1) {
+        items[activeMentionIndex].click();
+      } else {
+        hideMentionsDropdown();
+      }
+      break;
+    case "Escape":
+      event.preventDefault();
+      hideMentionsDropdown();
+      break;
+    case "Tab":
+      event.preventDefault();
+      if (activeMentionIndex > -1) {
+        items[activeMentionIndex].click();
+      } else if (items.length > 0) {
+        items[0].click();
+      }
+      break;
+  }
+}
+
+function updateMentionHighlight(items) {
+  items.forEach((item, index) => {
+    if (index === activeMentionIndex) {
+      item.classList.add("selected");
+      item.scrollIntoView({ block: "nearest" });
+    } else {
+      item.classList.remove("selected");
+    }
+  });
+}
+
+document.addEventListener("click", function (event) {
+  if (mentionsDropdown && mentionsDropdown.style.display === "block") {
+    const isClickInsideTextarea =
+      currentMentionTextarea && currentMentionTextarea.contains(event.target);
+    const isClickInsideDropdown = mentionsDropdown.contains(event.target);
+    if (!isClickInsideTextarea && !isClickInsideDropdown) {
+      hideMentionsDropdown();
+    }
+  }
+});
+
+function formatTextWithMentions(text) {
+  if (!text) return "";
+
+  const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
+  return text.replace(mentionRegex, '<span class="mention-tag">@$1</span>');
+}
+
+function getCardUserTaskStatus(task, currentUserIdString) {
+  if (
+    !task ||
+    !task.checklists ||
+    task.checklists.length === 0 ||
+    !currentUserIdString
+  ) {
+    return { isAssigned: false, allUserTasksCompleted: false };
+  }
+
+  let isUserAssignedToAnyItem = false;
+  let allUserAssignedItemsCompleted = true;
+
+  for (const checklist of task.checklists) {
+    for (const item of checklist.items) {
+      if (
+        item.assignedUsers &&
+        item.assignedUsers.some(
+          (user) => String(user.id) === currentUserIdString
+        )
+      ) {
+        isUserAssignedToAnyItem = true;
+        if (!item.completed) {
+          allUserAssignedItemsCompleted = false;
+        }
+      }
+    }
+  }
+
+  if (!isUserAssignedToAnyItem) {
+    return { isAssigned: false, allUserTasksCompleted: false };
+  }
+
+  return {
+    isAssigned: true,
+    allUserTasksCompleted: allUserAssignedItemsCompleted,
+  };
+}
+
+function updateUserCardHighlight(taskId) {
+  const currentUser = authService.getUser();
+  const currentUserIdString = currentUser ? String(currentUser.id) : null;
+
+  if (!currentUserIdString) return;
+
+  const cardElement = document.querySelector(
+    `.kanban-card[data-task-id="${taskId}"]`
+  );
+  if (!cardElement) return;
+
+  const boardData = JSON.parse(currentBoardData.boardData);
+  const task = findTaskById(boardData, taskId);
+
+  if (!task) return;
+
+  const { isAssigned, allUserTasksCompleted } = getCardUserTaskStatus(
+    task,
+    currentUserIdString
+  );
+
+  cardElement.classList.remove(
+    "user-assigned-pending",
+    "user-assigned-completed"
+  );
+  cardElement.removeAttribute("title");
+
+  if (isAssigned) {
+    if (allUserTasksCompleted) {
+      cardElement.classList.add("user-assigned-completed");
+      cardElement.setAttribute(
+        "title",
+        "Все ваши задачи в этой карточке выполнены."
+      );
+    } else {
+      cardElement.classList.add("user-assigned-pending");
+      cardElement.setAttribute(
+        "title",
+        "За вами закреплены невыполненные задачи в этой карточке."
+      );
+    }
+  }
+}
+
+export async function renderKanbanBoard(
+  boardId,
+  preloadedBoardData = null,
+  userRole = null
+) {
+  let board = preloadedBoardData;
+
+  const currentUser = authService.getUser();
+  const currentUserIdString = currentUser ? String(currentUser.id) : null;
+
+  console.log(
+    "Рендеринг канбан-доски с ID:",
+    boardId,
+    "Роль пользователя:",
+    userRole,
+    "Текущий UserId:",
+    currentUserIdString
+  );
+  if (preloadedBoardData) {
+    console.log(
+      "Используем предзагруженные данные для доски:",
+      preloadedBoardData.id
+    );
+  }
+
+  const isViewOnly = userRole === "VIEWER";
+  console.log("Режим только для просмотра:", isViewOnly);
+
   if (!board) {
-    // Проверяем наличие доски в кэше памяти
     const boardsMemoryCache = getBoardsCache();
     if (boardsMemoryCache) {
-      const cachedBoard = boardsMemoryCache.find(b => b.id == boardId);
+      const cachedBoard = boardsMemoryCache.find((b) => b.id == boardId);
       if (cachedBoard) {
         console.log(`Найдена доска с ID ${boardId} в кэше памяти`);
         board = cachedBoard;
       }
     }
-    
-    // Если доски нет в кэше памяти, проверяем localStorage
+
     if (!board) {
-      const localStorageCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-      const cachedBoard = localStorageCache.find(b => b.id == boardId);
+      const localStorageCache = JSON.parse(
+        localStorage.getItem("kanban_boards_cache") || "[]"
+      );
+      const cachedBoard = localStorageCache.find((b) => b.id == boardId);
       if (cachedBoard) {
         console.log(`Найдена доска с ID ${boardId} в localStorage`);
         board = cachedBoard;
       }
     }
-    
-    // Если доски нет в кэше или нет несохраненных изменений, загружаем с сервера
+
     if (!board || !board._hasUnsavedChanges) {
       try {
         console.log(`Загрузка данных доски с ID ${boardId} с сервера...`);
-        // Получаем данные о доске с сервера
+
         const serverBoard = await kanbanService.getBoard(boardId);
-        
-        // Если у нас есть кэшированная доска с несохраненными изменениями, 
-        // используем ее, иначе используем доску с сервера
+
         if (board && board._hasUnsavedChanges) {
-          console.log('Обнаружены несохраненные изменения, используем кэшированную версию');
+          console.log(
+            "Обнаружены несохраненные изменения, используем кэшированную версию"
+          );
         } else {
           board = serverBoard;
-          console.log('Используем данные с сервера');
-          
-          // Обновляем кэш в памяти сразу после получения данных с сервера
+          console.log("Используем данные с сервера");
+
           const boardsCache = getBoardsCache();
           if (boardsCache) {
-            const boardIndex = boardsCache.findIndex(b => b.id == boardId);
+            const boardIndex = boardsCache.findIndex((b) => b.id == boardId);
             if (boardIndex !== -1) {
               boardsCache[boardIndex] = { ...board };
             } else {
               boardsCache.push({ ...board });
             }
             updateBoardsCache(boardsCache);
-            console.log('Обновлен кэш в памяти после загрузки с сервера');
+            console.log("Обновлен кэш в памяти после загрузки с сервера");
           }
-          
-          // Обновляем кэш в localStorage
-          const localStorageCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-          const boardIndex = localStorageCache.findIndex(b => b.id == boardId);
+
+          const localStorageCache = JSON.parse(
+            localStorage.getItem("kanban_boards_cache") || "[]"
+          );
+          const boardIndex = localStorageCache.findIndex(
+            (b) => b.id == boardId
+          );
           if (boardIndex !== -1) {
             localStorageCache[boardIndex] = { ...board };
           } else {
             localStorageCache.push({ ...board });
           }
-          localStorage.setItem('kanban_boards_cache', JSON.stringify(localStorageCache));
-          console.log('Обновлен кэш в localStorage после загрузки с сервера');
+          localStorage.setItem(
+            "kanban_boards_cache",
+            JSON.stringify(localStorageCache)
+          );
+          console.log("Обновлен кэш в localStorage после загрузки с сервера");
         }
       } catch (error) {
         console.error(`Ошибка при загрузке доски с ID ${boardId}:`, error);
-        
-        // Если есть кэшированные данные, используем их, даже если нет флага несохраненных изменений
+
         if (board) {
-          console.log('Используем кэшированные данные из-за ошибки сервера');
+          console.log("Используем кэшированные данные из-за ошибки сервера");
         } else {
           return `
             <div class="board-container">
               <div class="board-header">
                 <h1 class="board-title">Ошибка загрузки</h1>
               </div>
-              <p>Не удалось загрузить доску: ${error.message || 'Неизвестная ошибка'}</p>
+              <p>Не удалось загрузить доску: ${
+                error.message || "Неизвестная ошибка"
+              }</p>
             </div>
           `;
         }
       }
     } else {
-      console.log(`Используем кэшированные данные для доски с ID ${boardId} с несохраненными изменениями`);
+      console.log(
+        `Используем кэшированные данные для доски с ID ${boardId} с несохраненными изменениями`
+      );
     }
   } else {
     console.log(`Используем предзагруженные данные для доски с ID ${boardId}`);
   }
-  
-  // Если доска не найдена, показываем заглушку
+
   if (!board) {
     return `
       <div class="board-container">
@@ -116,599 +511,775 @@ export async function renderKanbanBoard(boardId, preloadedBoardData = null) {
       </div>
     `;
   }
-  
-  // Проверка наличия несохраненных изменений в загруженной доске
+
   if (board._hasUnsavedChanges) {
     boardChanged = true;
-    
-    // Отображаем статус несохраненных изменений после рендеринга доски
+
     setTimeout(() => {
-      const saveStatus = document.getElementById('saveStatus');
+      const saveStatus = document.getElementById("saveStatus");
       if (saveStatus) {
-        saveStatus.textContent = 'Изменения не сохранены...';
-        saveStatus.classList.add('unsaved');
+        saveStatus.textContent = "Изменения не сохранены...";
+        saveStatus.classList.add("unsaved");
       }
     }, 0);
   } else {
     boardChanged = false;
   }
-  
-  // Сохраняем текущие данные доски
+
   currentBoardData = board;
-  
-  // Парсим данные доски из JSON
+
   let boardColumnsData = [];
   try {
     const parsedData = JSON.parse(board.boardData);
     boardColumnsData = parsedData.columns || [];
   } catch (error) {
-    console.error('Ошибка при парсинге данных доски:', error);
+    console.error("Ошибка при парсинге данных доски:", error);
     boardColumnsData = [];
   }
-  
-  // Генерируем HTML для колонок
-  const columnsHtml = boardColumnsData.map((column, index) => {
-    // Генерируем HTML для карточек в колонке
-    const cardsHtml = column.tasks.map(task => `
-      <div class="kanban-card" draggable="true" data-task-id="${task.id}">
+
+  const columnsHtml = boardColumnsData
+    .map((column, index) => {
+      const cardsHtml = column.tasks
+        .map((task) => {
+          const commentsCount = task.comments ? task.comments.length : 0;
+          const hasDescription =
+            task.description && task.description.trim() !== "";
+          const isCompleted = task.completed ? "completed" : "";
+          const checkboxClass = task.completed ? "checked" : "";
+
+          const { totalChecklistItems, completedChecklistItems } =
+            getChecklistStats(task);
+
+          let userHighlightClass = "";
+          let userTaskStatusTitle = "";
+          if (currentUserIdString) {
+            const userTaskStatus = getCardUserTaskStatus(
+              task,
+              currentUserIdString
+            );
+            if (userTaskStatus.isAssigned) {
+              userHighlightClass = userTaskStatus.allUserTasksCompleted
+                ? "user-assigned-completed"
+                : "user-assigned-pending";
+              userTaskStatusTitle = userTaskStatus.allUserTasksCompleted
+                ? "Все ваши задачи в этой карточке выполнены."
+                : "За вами закреплены невыполненные задачи в этой карточке.";
+            }
+          }
+
+          return `
+      <div class="kanban-card ${isCompleted} ${userHighlightClass}" draggable="${!isViewOnly}" data-task-id="${
+            task.id
+          }" ${userTaskStatusTitle ? `title="${userTaskStatusTitle}"` : ""}>
+        <div class="card-checkbox ${checkboxClass}" data-task-id="${
+            task.id
+          }"></div>
         <div class="card-content">
           <div class="card-title">${task.title}</div>
-          ${task.description ? `<div class="card-description">${task.description}</div>` : ''}
-        </div>
-        <div class="card-actions">
-          <button class="card-edit-btn" data-task-id="${task.id}">✏️</button>
-          <button class="card-delete-btn" data-task-id="${task.id}">🗑️</button>
+          <div class="card-indicators">
+            ${
+              hasDescription
+                ? `<div class="card-indicator description-indicator" title="Карточка содержит описание">
+                <i class="fas fa-align-left"></i>
+              </div>`
+                : ""
+            }
+            ${
+              commentsCount > 0
+                ? `<div class="card-indicator comments-indicator" title="Комментарии: ${commentsCount}">
+                <i class="fas fa-comment"></i>
+                <span class="indicator-count">${commentsCount}</span>
+              </div>`
+                : ""
+            }
+            ${
+              totalChecklistItems > 0
+                ? `<div class="card-indicator checklist-indicator" title="Чек-лист: ${completedChecklistItems}/${totalChecklistItems}">
+                <i class="fas fa-list-check"></i>
+                <span class="indicator-count">${completedChecklistItems}/${totalChecklistItems}</span>
+              </div>`
+                : ""
+            }
+          </div>
         </div>
       </div>
-    `).join('');
-    
-    return `
+    `;
+        })
+        .join("");
+
+      return `
       <div class="kanban-column" data-column-id="${column.id}">
         <div class="column-header">
           <div class="column-title-container">
-            <h3 class="column-title" data-column-id="${column.id}">${column.name}</h3>
+            <h3 class="column-title" data-column-id="${column.id}">${
+        column.name
+      }</h3>
           </div>
+          ${
+            !isViewOnly
+              ? `
           <div class="column-actions">
-            <button class="column-delete-btn" data-column-id="${column.id}">🗑️</button>
+            <button class="column-menu-btn" data-column-id="${column.id}">⋮</button>
+            <div class="column-menu" data-column-id="${column.id}">
+              <div class="column-menu-item" data-action="edit" data-column-id="${column.id}">Редактировать</div>
+              <div class="column-menu-item" data-action="copy" data-column-id="${column.id}">Копировать</div>
+              <div class="column-menu-item" data-action="delete" data-column-id="${column.id}">Удалить</div>
+            </div>
           </div>
+          `
+              : ""
+          }
         </div>
         <div class="column-cards" data-column-id="${column.id}">
           ${cardsHtml}
         </div>
+        ${
+          !isViewOnly
+            ? `
         <div class="column-footer">
           <button class="add-card-btn" data-column-id="${column.id}">+ Добавить карточку</button>
         </div>
+        `
+            : ""
+        }
       </div>
     `;
-  }).join('');
-  
-  // Рендерим доску
+    })
+    .join("");
+
   return `
     <div class="board-container">
       <div class="board-header">
         <h1 class="board-title">${board.name}</h1>
         <div class="board-actions">
           <div id="saveStatus" class="save-status">Все изменения сохранены</div>
+          ${
+            !isViewOnly
+              ? `
           <button class="btn-secondary" id="editBoardButton">Редактировать</button>
           <button class="btn-danger" id="deleteBoardButton">Удалить</button>
+          `
+              : ""
+          }
         </div>
       </div>
       
-      <div class="kanban-board" id="kanbanBoard" data-board-id="${boardId}">
+      <div class="kanban-board" id="kanbanBoard" data-board-id="${boardId}" ${
+    isViewOnly ? 'data-view-only="true"' : ""
+  }>
         ${columnsHtml}
+        ${
+          !isViewOnly
+            ? `
         <div class="add-column-container">
           <button class="add-column-btn" id="addColumnBtn">+ Добавить колонку</button>
         </div>
+        `
+            : ""
+        }
       </div>
     </div>
   `;
 }
 
-// Функция для установки обработчиков событий канбан-доски
-export function setupBoardEventListeners(boardId, onBoardDeleted) {
-  // Обработчик для кнопки редактирования доски
-  const editBoardButton = document.getElementById('editBoardButton');
+export function setupBoardEventListeners(
+  boardId,
+  onBoardDeleted,
+  userRole = null
+) {
+  const isViewOnly = userRole === "VIEWER";
+  console.log(
+    "Настройка обработчиков канбан-доски, режим только для просмотра:",
+    isViewOnly
+  );
+
+  if (isViewOnly) {
+    console.log(
+      "Пользователь является наблюдателем, функционал редактирования отключен"
+    );
+
+    const board = document.getElementById("kanbanBoard");
+    if (board) {
+      board.classList.add("view-only-mode");
+    }
+    return;
+  }
+
+  const editBoardButton = document.getElementById("editBoardButton");
   if (editBoardButton) {
-    editBoardButton.addEventListener('click', () => {
+    editBoardButton.addEventListener("click", () => {
       editBoard(boardId);
     });
   }
-  
-  // Обработчик для кнопки удаления доски
-  const deleteBoardButton = document.getElementById('deleteBoardButton');
+
+  const deleteBoardButton = document.getElementById("deleteBoardButton");
   if (deleteBoardButton) {
-    deleteBoardButton.addEventListener('click', () => {
+    deleteBoardButton.addEventListener("click", () => {
       deleteBoard(boardId, onBoardDeleted);
     });
   }
-  
-  // Обработчик для кнопки добавления колонки
-  const addColumnBtn = document.getElementById('addColumnBtn');
+
+  const addColumnBtn = document.getElementById("addColumnBtn");
   if (addColumnBtn) {
-    addColumnBtn.addEventListener('click', () => {
+    addColumnBtn.addEventListener("click", () => {
       addNewColumn();
     });
   }
-  
-  // Обработчики для кнопок добавления карточек
-  const addCardBtns = document.querySelectorAll('.add-card-btn');
-  addCardBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const columnId = e.target.getAttribute('data-column-id');
+
+  const addCardBtns = document.querySelectorAll(".add-card-btn");
+  addCardBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const columnId = e.target.getAttribute("data-column-id");
       addNewCard(columnId);
     });
   });
-  
-  // Обработчики для заголовков колонок (инлайн-редактирование)
-  const columnTitles = document.querySelectorAll('.column-title-container');
-  columnTitles.forEach(titleContainer => {
-    titleContainer.addEventListener('click', (e) => {
-      // Находим элемент заголовка внутри контейнера
-      const titleElement = titleContainer.querySelector('.column-title');
+
+  const columnTitles = document.querySelectorAll(".column-title-container");
+  columnTitles.forEach((titleContainer) => {
+    titleContainer.addEventListener("click", (e) => {
+      const titleElement = titleContainer.querySelector(".column-title");
       if (titleElement) {
-        const columnId = titleElement.getAttribute('data-column-id');
+        const columnId = titleElement.getAttribute("data-column-id");
         startEditColumnTitle(titleElement, columnId);
       }
     });
   });
-  
-  // Обработчики для кнопок удаления колонок
-  const columnDeleteBtns = document.querySelectorAll('.column-delete-btn');
-  columnDeleteBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const columnId = e.target.getAttribute('data-column-id');
-      deleteColumn(columnId);
+
+  const columnMenuBtns = document.querySelectorAll(".column-menu-btn");
+  columnMenuBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const columnId = e.target.getAttribute("data-column-id");
+      const menu = document.querySelector(
+        `.column-menu[data-column-id="${columnId}"]`
+      );
+
+      document.querySelectorAll(".column-menu.active").forEach((m) => {
+        if (m !== menu) m.classList.remove("active");
+      });
+
+      menu.classList.toggle("active");
     });
   });
-  
-  // Обработчики для кнопок редактирования карточек
-  const cardEditBtns = document.querySelectorAll('.card-edit-btn');
-  cardEditBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Останавливаем всплытие события
-      const taskId = e.target.getAttribute('data-task-id');
+
+  document.addEventListener("click", (e) => {
+    if (
+      !e.target.closest(".column-menu") &&
+      !e.target.closest(".column-menu-btn")
+    ) {
+      document.querySelectorAll(".column-menu.active").forEach((menu) => {
+        menu.classList.remove("active");
+      });
+    }
+  });
+
+  document.querySelectorAll(".column-menu-item").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      const action = e.target.getAttribute("data-action");
+      const columnId = e.target.getAttribute("data-column-id");
+
+      if (action === "edit") {
+        const titleElement = document.querySelector(
+          `.column-title[data-column-id="${columnId}"]`
+        );
+        if (titleElement) {
+          startEditColumnTitle(titleElement, columnId);
+        }
+      } else if (action === "copy") {
+        copyColumn(columnId);
+      } else if (action === "delete") {
+        deleteColumn(columnId);
+      }
+
+      const menu = e.target.closest(".column-menu");
+      if (menu) menu.classList.remove("active");
+    });
+  });
+
+  const cardEditBtns = document.querySelectorAll(".card-edit-btn");
+  cardEditBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const taskId = e.target.getAttribute("data-task-id");
       editCard(taskId);
     });
   });
-  
-  // Обработчики для кнопок удаления карточек
-  const cardDeleteBtns = document.querySelectorAll('.card-delete-btn');
-  cardDeleteBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Останавливаем всплытие события
-      const taskId = e.target.getAttribute('data-task-id');
+
+  const cardDeleteBtns = document.querySelectorAll(".card-delete-btn");
+  cardDeleteBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const taskId = e.target.getAttribute("data-task-id");
       deleteCard(taskId);
     });
   });
-  
-  // Настройка drag and drop для карточек
+
+  const cards = document.querySelectorAll(".kanban-card");
+  cards.forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".card-actions, .card-edit-btn, .card-delete-btn")) {
+        return;
+      }
+
+      if (e.target.classList.contains("card-checkbox")) {
+        return;
+      }
+
+      const taskId = card.getAttribute("data-task-id");
+      openCardDetailModal(taskId);
+    });
+
+    const checkbox = card.querySelector(".card-checkbox");
+    if (checkbox) {
+      checkbox.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const taskId = e.target.getAttribute("data-task-id");
+        toggleTaskCompletion(taskId);
+      });
+    }
+  });
+
   setupDragAndDrop();
-  
-  // Очищаем предыдущий слушатель beforeunload, если был установлен
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-  
-  // Добавляем слушатель для обработки несохраненных изменений при уходе со страницы
-  window.addEventListener('beforeunload', handleBeforeUnload);
+
+  setupColumnDragAndDrop();
+
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+
+  window.addEventListener("beforeunload", handleBeforeUnload);
 }
 
-// Обработчик события beforeunload
 function handleBeforeUnload(e) {
   if (boardChanged) {
-    // Отображаем предупреждение пользователю
-    const message = 'У вас есть несохраненные изменения. Вы уверены, что хотите покинуть страницу?';
+    const message =
+      "У вас есть несохраненные изменения. Вы уверены, что хотите покинуть страницу?";
     e.returnValue = message;
     forceSaveBoardData();
     return message;
   }
 }
 
-// Настройка перетаскивания карточек
 function setupDragAndDrop() {
-  const cards = document.querySelectorAll('.kanban-card');
-  const dropZones = document.querySelectorAll('.column-cards');
-  
-  // Настраиваем перетаскивание для всех карточек
-  cards.forEach(card => {
-    card.addEventListener('dragstart', handleDragStart);
-    card.addEventListener('dragend', handleDragEnd);
-    // Добавляем новые обработчики для карточек
-    card.addEventListener('dragover', handleDragOver);
-    card.addEventListener('dragleave', handleDragLeave);
+  const cards = document.querySelectorAll(".kanban-card");
+  const dropZones = document.querySelectorAll(".column-cards");
+
+  cards.forEach((card) => {
+    card.addEventListener("dragstart", handleDragStart);
+    card.addEventListener("dragend", handleDragEnd);
+
+    card.addEventListener("dragover", handleDragOver);
+    card.addEventListener("dragleave", handleDragLeave);
   });
-  
-  // Настраиваем зоны для бросания карточек
-  dropZones.forEach(zone => {
-    zone.addEventListener('dragover', handleDragOver);
-    zone.addEventListener('dragenter', handleDragEnter);
-    zone.addEventListener('dragleave', handleDragLeave);
-    zone.addEventListener('drop', handleDrop);
+
+  dropZones.forEach((zone) => {
+    zone.addEventListener("dragover", handleDragOver);
+    zone.addEventListener("dragenter", handleDragEnter);
+    zone.addEventListener("dragleave", handleDragLeave);
+    zone.addEventListener("drop", handleDrop);
   });
 }
 
-// Обработчики для drag and drop
 function handleDragStart(e) {
-  e.dataTransfer.setData('text/plain', e.target.getAttribute('data-task-id'));
-  e.target.classList.add('dragging');
-  // Записываем исходную колонку
-  const sourceColumnId = e.target.closest('.column-cards').getAttribute('data-column-id');
-  e.dataTransfer.setData('source-column', sourceColumnId);
+  if (e.target.closest(".column-header")) return;
+
+  e.dataTransfer.setData("text/plain", e.target.getAttribute("data-task-id"));
+  e.dataTransfer.setData("dragging-type", "card");
+  e.target.classList.add("dragging");
+
+  const sourceColumnId = e.target
+    .closest(".column-cards")
+    .getAttribute("data-column-id");
+  e.dataTransfer.setData("source-column", sourceColumnId);
+
+  const board = document.getElementById("kanbanBoard");
+  if (board) {
+    board.setAttribute("data-dragging", "card");
+  }
 }
 
 function handleDragEnd(e) {
-  e.target.classList.remove('dragging');
-  
-  // Удаляем все индикаторы после завершения перетаскивания
-  document.querySelectorAll('.card-drop-indicator').forEach(el => el.remove());
-  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  e.target.classList.remove("dragging");
+
+  document
+    .querySelectorAll(".card-drop-indicator")
+    .forEach((el) => el.remove());
+  document
+    .querySelectorAll(".drag-over")
+    .forEach((el) => el.classList.remove("drag-over"));
+
+  const board = document.getElementById("kanbanBoard");
+  if (board) {
+    board.removeAttribute("data-dragging");
+  }
 }
 
 function handleDragOver(e) {
-  e.preventDefault(); // Разрешаем drop
-  
-  // Находим ближайшую карточку и колонку
-  const cardElement = e.target.closest('.kanban-card');
-  const columnElement = e.target.closest('.column-cards');
-  
-  // Проверяем, не является ли целевой элемент индикатором
-  const isDropIndicator = e.target.classList.contains('card-drop-indicator');
+  e.preventDefault();
+
+  const board = document.getElementById("kanbanBoard");
+  if (!board || board.getAttribute("data-dragging") !== "card") return;
+
+  if (board.classList.contains("dragging-column")) return;
+
+  const cardElement = e.target.closest(".kanban-card");
+  const columnElement = e.target.closest(".column-cards");
+
+  const isDropIndicator = e.target.classList.contains("card-drop-indicator");
   if (isDropIndicator) {
-    // Если мы находимся над индикатором, ничего не делаем
     return;
   }
-  
-  // Находим текущий индикатор, если он есть
-  const existingIndicator = columnElement.querySelector('.card-drop-indicator');
-  
-  // Если мы не над карточкой и не в пустой колонке, ничего не делаем
+
+  const existingIndicator = columnElement?.querySelector(
+    ".card-drop-indicator"
+  );
+
   if (!cardElement && existingIndicator) {
     return;
   }
-  
-  // Удаляем все существующие индикаторы
-  document.querySelectorAll('.card-drop-indicator').forEach(el => el.remove());
-  document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
-    el.classList.remove('drag-over-top', 'drag-over-bottom');
-  });
-  
-  // Всегда добавляем класс drag-over к колонке при перетаскивании над любым элементом в колонке
+
+  document
+    .querySelectorAll(".card-drop-indicator")
+    .forEach((el) => el.remove());
+  document
+    .querySelectorAll(".drag-over-top, .drag-over-bottom")
+    .forEach((el) => {
+      el.classList.remove("drag-over-top", "drag-over-bottom");
+    });
+
   if (columnElement) {
-    columnElement.classList.add('drag-over');
+    columnElement.classList.add("drag-over");
   }
-  
+
   if (!cardElement) {
-    // Если мы находимся над пустой областью колонки, только подсвечиваем колонку
     return;
   }
-  
-  // Проверяем, не является ли эта карточка перетаскиваемой
-  if (cardElement.classList.contains('dragging')) {
+
+  if (cardElement.classList.contains("dragging")) {
     return;
   }
-  
-  // Находим положение курсора относительно карточки
+
   const rect = cardElement.getBoundingClientRect();
   const y = e.clientY - rect.top;
   const isBottomHalf = y > rect.height / 2;
-  
-  // Создаем индикатор вместо подсветки границ
-  const indicator = document.createElement('div');
-  indicator.className = 'card-drop-indicator';
-  
+
+  const indicator = document.createElement("div");
+  indicator.className = "card-drop-indicator";
+
   if (isBottomHalf) {
-    // Размещаем индикатор снизу карточки
     cardElement.after(indicator);
   } else {
-    // Размещаем индикатор сверху карточки
     cardElement.before(indicator);
   }
 }
 
 function handleDragEnter(e) {
   e.preventDefault();
-  // Добавляем класс только для колонки независимо от того, над чем находится курсор
-  const columnElement = e.target.closest('.column-cards');
+
+  const board = document.getElementById("kanbanBoard");
+  if (
+    !board ||
+    board.getAttribute("data-dragging") !== "card" ||
+    board.classList.contains("dragging-column")
+  )
+    return;
+
+  const columnElement = e.target.closest(".column-cards");
   if (columnElement) {
-    columnElement.classList.add('drag-over');
+    columnElement.classList.add("drag-over");
   }
 }
 
 function handleDragLeave(e) {
-  // Удаляем класс у колонки только если покидаем саму колонку, а не элементы внутри неё
-  // Проверяем, что relatedTarget (элемент, на который переходим) не содержится в текущей колонке
+  const board = document.getElementById("kanbanBoard");
+  if (
+    !board ||
+    board.getAttribute("data-dragging") !== "card" ||
+    board.classList.contains("dragging-column")
+  )
+    return;
+
   const columnElement = e.currentTarget;
   const relatedTarget = e.relatedTarget;
-  
+
   if (!columnElement.contains(relatedTarget)) {
-    columnElement.classList.remove('drag-over');
+    columnElement.classList.remove("drag-over");
   }
-  
-  // При уходе с карточки необязательно удалять индикатор - это будет сделано при следующем dragover
 }
 
 function handleDrop(e) {
   e.preventDefault();
-  
-  // Очищаем все индикаторы перетаскивания
-  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-  
-  // Получаем данные перетаскивания
-  const taskId = e.dataTransfer.getData('text/plain');
-  const sourceColumnId = e.dataTransfer.getData('source-column');
-  const targetColumnId = e.currentTarget.getAttribute('data-column-id');
-  
-  // Находим карточку, которую перетаскиваем
-  const draggedCard = document.querySelector(`.kanban-card[data-task-id="${taskId}"]`);
+
+  const board = document.getElementById("kanbanBoard");
+  if (!board || board.getAttribute("data-dragging") !== "card") return;
+
+  document
+    .querySelectorAll(".drag-over")
+    .forEach((el) => el.classList.remove("drag-over"));
+
+  const taskId = e.dataTransfer.getData("text/plain");
+  const sourceColumnId = e.dataTransfer.getData("source-column");
+  const targetColumnId = e.currentTarget.getAttribute("data-column-id");
+
+  const draggedCard = document.querySelector(
+    `.kanban-card[data-task-id="${taskId}"]`
+  );
   if (!draggedCard) return;
-  
-  // Найдем индикатор вставки
-  const dropIndicator = document.querySelector('.card-drop-indicator');
-  
-  // Находим целевую карточку (если она есть)
-  const cardElement = e.target.closest('.kanban-card');
-  
-  // Определяем, перемещение между колонками или внутри колонки
+
+  const dropIndicator = document.querySelector(".card-drop-indicator");
+
+  const cardElement = e.target.closest(".kanban-card");
+
   if (sourceColumnId !== targetColumnId) {
     if (dropIndicator) {
-      // Вставляем карточку на место индикатора
       dropIndicator.parentNode.insertBefore(draggedCard, dropIndicator);
     } else if (cardElement && cardElement !== draggedCard) {
-      // Если нет индикатора, но есть карточка (для обратной совместимости)
       const rect = cardElement.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const isBottomHalf = y > rect.height / 2;
-      
+
       if (isBottomHalf) {
         cardElement.after(draggedCard);
       } else {
         cardElement.before(draggedCard);
       }
     } else {
-      // Если ни индикатора, ни карточки нет, добавляем в конец колонки
       e.currentTarget.appendChild(draggedCard);
     }
-    // Обновляем данные доски для перемещения между колонками
+
     moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId);
-    // Обновляем порядок карточек в целевой колонке
+
     updateCardOrderInColumn(targetColumnId);
   } else {
-    // Перемещение внутри колонки
     if (dropIndicator) {
-      // Вставляем карточку на место индикатора
       dropIndicator.parentNode.insertBefore(draggedCard, dropIndicator);
     } else if (cardElement && cardElement !== draggedCard) {
-      // Если нет индикатора, но есть карточка (для обратной совместимости)
       const rect = cardElement.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const isBottomHalf = y > rect.height / 2;
-      
+
       if (isBottomHalf) {
         cardElement.after(draggedCard);
       } else {
         cardElement.before(draggedCard);
       }
     } else if (!cardElement || e.currentTarget.children.length === 0) {
-      // Если колонка пуста или курсор не над карточкой, добавляем в конец колонки
       e.currentTarget.appendChild(draggedCard);
     }
-    // Обновляем порядок карточек в данных
+
     updateCardOrderInColumn(sourceColumnId);
   }
-  
-  // Удаляем все индикаторы после вставки
-  document.querySelectorAll('.card-drop-indicator').forEach(el => el.remove());
-  
-  // Восстанавливаем стили перетаскиваемой карточки
-  draggedCard.classList.remove('dragging');
+
+  document
+    .querySelectorAll(".card-drop-indicator")
+    .forEach((el) => el.remove());
+
+  draggedCard.classList.remove("dragging");
+
+  board.removeAttribute("data-dragging");
 }
 
-// Функция для перемещения карточки между колонками
 function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
   try {
-    // Получаем текущие данные доски
     const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Находим исходную и целевую колонки
-    const sourceColumnIndex = boardData.columns.findIndex(col => col.id === sourceColumnId);
-    const targetColumnIndex = boardData.columns.findIndex(col => col.id === targetColumnId);
-    
+
+    const sourceColumnIndex = boardData.columns.findIndex(
+      (col) => col.id === sourceColumnId
+    );
+    const targetColumnIndex = boardData.columns.findIndex(
+      (col) => col.id === targetColumnId
+    );
+
     if (sourceColumnIndex === -1 || targetColumnIndex === -1) {
-      console.error('Не удалось найти исходную или целевую колонку');
+      console.error("Не удалось найти исходную или целевую колонку");
       return;
     }
-    
-    // Находим задачу в исходной колонке
-    const taskIndex = boardData.columns[sourceColumnIndex].tasks.findIndex(task => task.id === taskId);
+
+    const taskIndex = boardData.columns[sourceColumnIndex].tasks.findIndex(
+      (task) => task.id === taskId
+    );
     if (taskIndex === -1) {
-      console.error('Не удалось найти задачу в исходной колонке');
+      console.error("Не удалось найти задачу в исходной колонке");
       return;
     }
-    
-    // Извлекаем задачу из исходной колонки
-    const task = boardData.columns[sourceColumnIndex].tasks.splice(taskIndex, 1)[0];
-    
-    // Определяем порядок карточек из DOM для целевой колонки
-    const targetColumnCards = document.querySelector(`.column-cards[data-column-id="${targetColumnId}"]`);
-    const cardElements = targetColumnCards.querySelectorAll('.kanban-card');
-    
-    // Создаем новый массив задач в целевой колонке в правильном порядке
+
+    const task = boardData.columns[sourceColumnIndex].tasks.splice(
+      taskIndex,
+      1
+    )[0];
+
+    const targetColumnCards = document.querySelector(
+      `.column-cards[data-column-id="${targetColumnId}"]`
+    );
+    const cardElements = targetColumnCards.querySelectorAll(".kanban-card");
+
     const newTasks = [];
     let taskAdded = false;
-    
-    // Проходим по всем элементам DOM и создаем новый массив в правильном порядке
-    cardElements.forEach(card => {
-      const cardId = card.getAttribute('data-task-id');
-      
+
+    cardElements.forEach((card) => {
+      const cardId = card.getAttribute("data-task-id");
+
       if (cardId === taskId) {
-        // Это наша перемещенная карточка, её уже добавили в DOM,
-        // но нужно добавить её данные в массив в правильном порядке
         taskAdded = true;
         newTasks.push(task);
       } else {
-        // Это другая карточка, находим её данные и добавляем в массив
-        const existingTask = boardData.columns[targetColumnIndex].tasks.find(t => t.id === cardId);
+        const existingTask = boardData.columns[targetColumnIndex].tasks.find(
+          (t) => t.id === cardId
+        );
         if (existingTask) {
           newTasks.push(existingTask);
         }
       }
     });
-    
-    // Обновляем массив задач целевой колонки
+
     boardData.columns[targetColumnIndex].tasks = newTasks;
-    
-    // Обновляем данные доски
+
     updateBoardData(boardData);
   } catch (error) {
-    console.error('Ошибка при перемещении карточки:', error);
+    console.error("Ошибка при перемещении карточки:", error);
   }
 }
 
-// Функция для обновления порядка карточек в колонке
 function updateCardOrderInColumn(columnId) {
   try {
-    // Получаем текущие данные доски
     const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Находим индекс колонки
-    const columnIndex = boardData.columns.findIndex(col => col.id === columnId);
+
+    const columnIndex = boardData.columns.findIndex(
+      (col) => col.id === columnId
+    );
     if (columnIndex === -1) {
-      console.error('Не удалось найти колонку');
+      console.error("Не удалось найти колонку");
       return;
     }
-    
-    // Получаем текущий порядок карточек из DOM
-    const columnCards = document.querySelector(`.column-cards[data-column-id="${columnId}"]`);
-    const cardElements = columnCards.querySelectorAll('.kanban-card');
-    
-    // Создаем новый массив задач в правильном порядке
+
+    const columnCards = document.querySelector(
+      `.column-cards[data-column-id="${columnId}"]`
+    );
+    const cardElements = columnCards.querySelectorAll(".kanban-card");
+
     const newTasks = [];
-    cardElements.forEach(card => {
-      const taskId = card.getAttribute('data-task-id');
-      const task = boardData.columns[columnIndex].tasks.find(t => t.id === taskId);
+    cardElements.forEach((card) => {
+      const taskId = card.getAttribute("data-task-id");
+      const task = boardData.columns[columnIndex].tasks.find(
+        (t) => t.id === taskId
+      );
       if (task) {
         newTasks.push(task);
       }
     });
-    
-    // Обновляем порядок задач в данных
+
     boardData.columns[columnIndex].tasks = newTasks;
-    
-    // Обновляем данные доски
+
     updateBoardData(boardData);
-    
-    console.log('Порядок карточек обновлен в колонке:', columnId);
+
+    console.log("Порядок карточек обновлен в колонке:", columnId);
   } catch (error) {
-    console.error('Ошибка при обновлении порядка карточек:', error);
+    console.error("Ошибка при обновлении порядка карточек:", error);
   }
 }
 
-// Функция для редактирования доски
 async function editBoard(boardId) {
   try {
-    // Получаем текущие данные доски
     const board = await kanbanService.getBoard(boardId);
-    
-    // Запрашиваем новое название доски
-    const newName = prompt('Введите новое название доски:', board.name);
-    
-    if (newName === null) return; // Пользователь отменил
-    if (newName.trim() === '') {
-      alert('Название доски не может быть пустым');
+
+    const newName = prompt("Введите новое название доски:", board.name);
+
+    if (newName === null) return;
+    if (newName.trim() === "") {
+      alert("Название доски не может быть пустым");
       return;
     }
-    
-    // Создаем объект для обновления
+
     const updateData = {
       name: newName,
-      boardData: board.boardData
+      boardData: board.boardData,
     };
-    
-    // Обновляем доску
+
     await kanbanService.updateBoard(boardId, updateData);
-    
-    // Обновляем страницу для отображения изменений
+
     window.location.reload();
   } catch (error) {
     console.error(`Ошибка при редактировании доски с ID ${boardId}:`, error);
-    alert('Не удалось обновить доску: ' + (error.message || 'Неизвестная ошибка'));
+    alert(
+      "Не удалось обновить доску: " + (error.message || "Неизвестная ошибка")
+    );
   }
 }
 
-// Функция для удаления доски
 async function deleteBoard(boardId, onBoardDeleted) {
-  // Проверяем, есть ли несохраненные изменения
   if (boardChanged) {
-    const saveFirst = window.confirm('Доска содержит несохраненные изменения. Сохранить перед удалением?');
+    const saveFirst = window.confirm(
+      "Доска содержит несохраненные изменения. Сохранить перед удалением?"
+    );
     if (saveFirst) {
       await saveBoardData();
     }
   }
-  
-  // Запрашиваем подтверждение удаления
-  const confirmed = window.confirm('Вы уверены, что хотите удалить эту доску? Это действие нельзя отменить.');
-  
+
+  const confirmed = window.confirm(
+    "Вы уверены, что хотите удалить эту доску? Это действие нельзя отменить."
+  );
+
   if (!confirmed) return;
-  
+
   try {
-    console.log('Удаление доски с ID:', boardId);
-    // Удаляем доску на сервере
+    console.log("Удаление доски с ID:", boardId);
+
     await kanbanService.deleteBoard(boardId);
-    
-    // Обновляем кэш досок в localStorage
-    const cachedBoards = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-    const updatedCache = cachedBoards.filter(board => board.id != boardId);
-    localStorage.setItem('kanban_boards_cache', JSON.stringify(updatedCache));
-    console.log('Кэш досок в localStorage обновлен после удаления, осталось досок:', updatedCache.length);
-    
-    // Обновляем кэш в памяти
+
+    const cachedBoards = JSON.parse(
+      localStorage.getItem("kanban_boards_cache") || "[]"
+    );
+    const updatedCache = cachedBoards.filter((board) => board.id != boardId);
+    localStorage.setItem("kanban_boards_cache", JSON.stringify(updatedCache));
+    console.log(
+      "Кэш досок в localStorage обновлен после удаления, осталось досок:",
+      updatedCache.length
+    );
+
     const currentCache = getBoardsCache();
     if (currentCache) {
-      const updatedMemoryCache = currentCache.filter(board => board.id != boardId);
+      const updatedMemoryCache = currentCache.filter(
+        (board) => board.id != boardId
+      );
       updateBoardsCache(updatedMemoryCache);
-      console.log('Кэш досок в памяти обновлен после удаления');
+      console.log("Кэш досок в памяти обновлен после удаления");
     }
-    
-    // Вызываем коллбэк, если он предоставлен
-    if (typeof onBoardDeleted === 'function') {
-      console.log('Вызываем коллбэк после удаления доски');
+
+    if (typeof onBoardDeleted === "function") {
+      console.log("Вызываем коллбэк после удаления доски");
       onBoardDeleted();
     } else {
-      console.log('Коллбэк не предоставлен, перенаправляем на дашборд вручную');
-      // Если коллбэк не предоставлен, выполняем перенаправление вручную
-      window.location.hash = '/dashboard';
+      console.log("Коллбэк не предоставлен, перенаправляем на дашборд вручную");
+
+      window.location.hash = "/dashboard";
     }
   } catch (error) {
     console.error(`Ошибка при удалении доски с ID ${boardId}:`, error);
-    alert('Не удалось удалить доску: ' + (error.message || 'Неизвестная ошибка'));
+    alert(
+      "Не удалось удалить доску: " + (error.message || "Неизвестная ошибка")
+    );
   }
 }
 
-// Функция для создания новой колонки
 function addNewColumn() {
-  // Запрашиваем название колонки
-  const columnName = prompt('Введите название новой колонки:');
-  if (!columnName || columnName.trim() === '') return;
-  
+  const columnName = prompt("Введите название новой колонки:");
+  if (!columnName || columnName.trim() === "") return;
+
   try {
-    // Генерируем уникальный ID для колонки
-    const columnId = 'column_' + Date.now();
-    
-    // Получаем текущие данные доски
+    const columnId = "column_" + Date.now();
+
     const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Добавляем новую колонку
+
     boardData.columns.push({
       id: columnId,
       name: columnName,
-      tasks: []
+      tasks: [],
     });
-    
-    // Обновляем данные доски
+
     updateBoardData(boardData);
-    
-    // Добавляем колонку в DOM без перезагрузки страницы
-    const kanbanBoard = document.getElementById('kanbanBoard');
-    const addColumnContainer = document.querySelector('.add-column-container');
-    
+
+    const kanbanBoard = document.getElementById("kanbanBoard");
+    const addColumnContainer = document.querySelector(".add-column-container");
+
     const newColumnHtml = `
       <div class="kanban-column" data-column-id="${columnId}">
         <div class="column-header">
@@ -716,7 +1287,12 @@ function addNewColumn() {
             <h3 class="column-title" data-column-id="${columnId}">${columnName}</h3>
           </div>
           <div class="column-actions">
-            <button class="column-delete-btn" data-column-id="${columnId}">🗑️</button>
+            <button class="column-menu-btn" data-column-id="${columnId}">⋮</button>
+            <div class="column-menu" data-column-id="${columnId}">
+              <div class="column-menu-item" data-action="edit" data-column-id="${columnId}">Редактировать</div>
+              <div class="column-menu-item" data-action="copy" data-column-id="${columnId}">Копировать</div>
+              <div class="column-menu-item" data-action="delete" data-column-id="${columnId}">Удалить</div>
+            </div>
           </div>
         </div>
         <div class="column-cards" data-column-id="${columnId}">
@@ -727,317 +1303,372 @@ function addNewColumn() {
         </div>
       </div>
     `;
-    
-    // Вставляем новую колонку перед кнопкой добавления
-    const newColumn = document.createElement('div');
+
+    const newColumn = document.createElement("div");
     newColumn.innerHTML = newColumnHtml;
     kanbanBoard.insertBefore(newColumn.firstElementChild, addColumnContainer);
-    
-    // Добавляем обработчики событий
-    const newColumnElement = kanbanBoard.querySelector(`.kanban-column[data-column-id="${columnId}"]`);
-    
-    // Обработчик для кнопки добавления карточки
-    const addCardBtn = newColumnElement.querySelector('.add-card-btn');
-    addCardBtn.addEventListener('click', () => {
+
+    const newColumnElement = kanbanBoard.querySelector(
+      `.kanban-column[data-column-id="${columnId}"]`
+    );
+
+    const addCardBtn = newColumnElement.querySelector(".add-card-btn");
+    addCardBtn.addEventListener("click", () => {
       addNewCard(columnId);
     });
-    
-    // Обработчик для заголовка колонки (инлайн-редактирование)
-    const columnTitleContainer = newColumnElement.querySelector('.column-title-container');
-    columnTitleContainer.addEventListener('click', (e) => {
-      const titleElement = columnTitleContainer.querySelector('.column-title');
+
+    const columnTitleContainer = newColumnElement.querySelector(
+      ".column-title-container"
+    );
+    columnTitleContainer.addEventListener("click", (e) => {
+      const titleElement = columnTitleContainer.querySelector(".column-title");
       if (titleElement) {
         startEditColumnTitle(titleElement, columnId);
       }
     });
-    
-    // Обработчики для кнопок удаления колонки
-    const deleteColumnBtn = newColumnElement.querySelector('.column-delete-btn');
-    deleteColumnBtn.addEventListener('click', () => {
-      deleteColumn(columnId);
+
+    const menuBtn = newColumnElement.querySelector(".column-menu-btn");
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = newColumnElement.querySelector(".column-menu");
+
+      document.querySelectorAll(".column-menu.active").forEach((m) => {
+        if (m !== menu) m.classList.remove("active");
+      });
+
+      menu.classList.toggle("active");
     });
-    
-    // Настраиваем drag and drop для новой колонки
-    const dropZone = newColumnElement.querySelector('.column-cards');
-    dropZone.addEventListener('dragover', handleDragOver);
-    dropZone.addEventListener('dragenter', handleDragEnter);
-    dropZone.addEventListener('dragleave', handleDragLeave);
-    dropZone.addEventListener('drop', handleDrop);
-    
+
+    const dropZone = newColumnElement.querySelector(".column-cards");
+    dropZone.addEventListener("dragover", handleDragOver);
+    dropZone.addEventListener("dragenter", handleDragEnter);
+    dropZone.addEventListener("dragleave", handleDragLeave);
+    dropZone.addEventListener("drop", handleDrop);
   } catch (error) {
-    console.error('Ошибка при добавлении колонки:', error);
-    alert('Не удалось добавить колонку: ' + error.message);
+    console.error("Ошибка при добавлении колонки:", error);
+    alert("Не удалось добавить колонку: " + error.message);
   }
 }
 
-// Функция для начала редактирования названия колонки
 function startEditColumnTitle(titleElement, columnId) {
-  // Получаем контейнер заголовка
-  const titleContainer = titleElement.closest('.column-title-container');
+  const titleContainer = titleElement.closest(".column-title-container");
   if (!titleContainer) return;
-  
-  // Сохраняем текущее название
+
   const currentName = titleElement.textContent;
-  
-  // Создаем поле ввода
-  const inputElement = document.createElement('input');
-  inputElement.type = 'text';
+
+  const inputElement = document.createElement("input");
+  inputElement.type = "text";
   inputElement.value = currentName;
-  inputElement.className = 'column-title-edit';
-  inputElement.setAttribute('data-column-id', columnId);
-  
-  // Очищаем контейнер и добавляем поле ввода
-  titleContainer.innerHTML = '';
+  inputElement.className = "column-title-edit";
+  inputElement.setAttribute("data-column-id", columnId);
+
+  titleContainer.innerHTML = "";
   titleContainer.appendChild(inputElement);
-  
-  // Фокусируемся на поле ввода и выделяем текст
+
   inputElement.focus();
   inputElement.select();
-  
-  // Обработчик для события клика вне поля ввода
+
   const handleClickOutside = (e) => {
     if (e.target !== inputElement) {
       finishEditColumnTitle(inputElement, titleContainer, columnId);
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener("click", handleClickOutside);
     }
   };
-  
-  // Обработчик для нажатия Enter
+
   const handleEnterKey = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       finishEditColumnTitle(inputElement, titleContainer, columnId);
-      inputElement.removeEventListener('keydown', handleEnterKey);
+      inputElement.removeEventListener("keydown", handleEnterKey);
     }
-    // Закрытие по Escape с отменой редактирования
-    if (e.key === 'Escape') {
+
+    if (e.key === "Escape") {
       e.preventDefault();
-      // Восстанавливаем исходное содержимое
+
       restoreColumnTitle(titleContainer, columnId, currentName);
-      inputElement.removeEventListener('keydown', handleEnterKey);
+      inputElement.removeEventListener("keydown", handleEnterKey);
       setTimeout(() => {
-        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener("click", handleClickOutside);
       }, 10);
     }
   };
-  
-  // Добавляем обработчики
+
   setTimeout(() => {
-    document.addEventListener('click', handleClickOutside);
-  }, 10); // Небольшая задержка, чтобы предотвратить немедленное срабатывание
-  
-  inputElement.addEventListener('keydown', handleEnterKey);
+    document.addEventListener("click", handleClickOutside);
+  }, 10);
+
+  inputElement.addEventListener("keydown", handleEnterKey);
 }
 
-// Функция для восстановления заголовка колонки
 function restoreColumnTitle(titleContainer, columnId, title) {
-  const h3 = document.createElement('h3');
-  h3.className = 'column-title';
-  h3.setAttribute('data-column-id', columnId);
+  const h3 = document.createElement("h3");
+  h3.className = "column-title";
+  h3.setAttribute("data-column-id", columnId);
   h3.textContent = title;
-  
-  titleContainer.innerHTML = '';
+
+  titleContainer.innerHTML = "";
   titleContainer.appendChild(h3);
 }
 
-// Функция для завершения редактирования названия колонки
 function finishEditColumnTitle(inputElement, titleContainer, columnId) {
   const newName = inputElement.value.trim();
-  
-  // Если название не пустое
-  if (newName !== '') {
-    // Получаем текущие данные доски
+
+  if (newName !== "") {
     try {
       const boardData = JSON.parse(currentBoardData.boardData);
-      
-      // Находим колонку для редактирования
-      const columnIndex = boardData.columns.findIndex(column => column.id === columnId);
+
+      const columnIndex = boardData.columns.findIndex(
+        (column) => column.id === columnId
+      );
       if (columnIndex === -1) {
-        console.error('Колонка не найдена');
-        // Восстанавливаем исходное значение
-        const defaultValue = inputElement.defaultValue || 'Колонка';
+        console.error("Колонка не найдена");
+
+        const defaultValue = inputElement.defaultValue || "Колонка";
         restoreColumnTitle(titleContainer, columnId, defaultValue);
         return;
       }
-      
+
       const currentName = boardData.columns[columnIndex].name;
-      
-      // Если название не изменилось, просто заменяем поле ввода на текст
+
       if (newName === currentName) {
         restoreColumnTitle(titleContainer, columnId, currentName);
         return;
       }
-      
-      // Обновляем название колонки
+
       boardData.columns[columnIndex].name = newName;
-      
-      // Обновляем данные доски
+
       updateBoardData(boardData);
-      
-      // Обновляем текст в DOM
+
       restoreColumnTitle(titleContainer, columnId, newName);
     } catch (error) {
-      console.error('Ошибка при редактировании колонки:', error);
-      alert('Не удалось отредактировать колонку: ' + error.message);
-      
-      // Восстанавливаем исходное название в случае ошибки
+      console.error("Ошибка при редактировании колонки:", error);
+      alert("Не удалось отредактировать колонку: " + error.message);
+
       const boardData = JSON.parse(currentBoardData.boardData);
-      const columnIndex = boardData.columns.findIndex(column => column.id === columnId);
+      const columnIndex = boardData.columns.findIndex(
+        (column) => column.id === columnId
+      );
       if (columnIndex !== -1) {
-        restoreColumnTitle(titleContainer, columnId, boardData.columns[columnIndex].name);
+        restoreColumnTitle(
+          titleContainer,
+          columnId,
+          boardData.columns[columnIndex].name
+        );
       } else {
-        const defaultValue = inputElement.defaultValue || 'Колонка';
+        const defaultValue = inputElement.defaultValue || "Колонка";
         restoreColumnTitle(titleContainer, columnId, defaultValue);
       }
     }
   } else {
-    // Если название пустое, восстанавливаем исходное значение
     const boardData = JSON.parse(currentBoardData.boardData);
-    const columnIndex = boardData.columns.findIndex(column => column.id === columnId);
+    const columnIndex = boardData.columns.findIndex(
+      (column) => column.id === columnId
+    );
     if (columnIndex !== -1) {
-      restoreColumnTitle(titleContainer, columnId, boardData.columns[columnIndex].name);
+      restoreColumnTitle(
+        titleContainer,
+        columnId,
+        boardData.columns[columnIndex].name
+      );
     } else {
-      const defaultValue = inputElement.defaultValue || 'Колонка';
+      const defaultValue = inputElement.defaultValue || "Колонка";
       restoreColumnTitle(titleContainer, columnId, defaultValue);
     }
   }
 }
 
-// Функция для удаления колонки
 function deleteColumn(columnId) {
-  // Запрашиваем подтверждение удаления
-  const confirmed = window.confirm('Вы уверены, что хотите удалить эту колонку? Все карточки в колонке будут удалены.');
+  const confirmed = window.confirm(
+    "Вы уверены, что хотите удалить эту колонку? Все карточки в колонке будут удалены."
+  );
   if (!confirmed) return;
-  
+
   try {
-    // Получаем текущие данные доски
     const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Находим индекс колонки для удаления
-    const columnIndex = boardData.columns.findIndex(column => column.id === columnId);
+
+    const columnIndex = boardData.columns.findIndex(
+      (column) => column.id === columnId
+    );
     if (columnIndex === -1) {
-      console.error('Колонка не найдена');
+      console.error("Колонка не найдена");
       return;
     }
-    
-    // Удаляем колонку
+
     boardData.columns.splice(columnIndex, 1);
-    
-    // Обновляем данные доски
+
     updateBoardData(boardData);
-    
-    // Удаляем колонку из DOM без перезагрузки страницы
-    const columnElement = document.querySelector(`.kanban-column[data-column-id="${columnId}"]`);
+
+    const columnElement = document.querySelector(
+      `.kanban-column[data-column-id="${columnId}"]`
+    );
     if (columnElement) {
       columnElement.remove();
     }
-    
   } catch (error) {
-    console.error('Ошибка при удалении колонки:', error);
-    alert('Не удалось удалить колонку: ' + error.message);
+    console.error("Ошибка при удалении колонки:", error);
+    alert("Не удалось удалить колонку: " + error.message);
   }
 }
 
-// Функция для добавления новой карточки
 function addNewCard(columnId) {
-  // Запрашиваем название карточки
-  const cardTitle = prompt('Введите название карточки:');
-  if (!cardTitle || cardTitle.trim() === '') return;
-  
-  // Запрашиваем описание карточки (опционально)
-  const cardDescription = prompt('Введите описание карточки (по желанию):');
-  
+  const columnElement = document.querySelector(
+    `.kanban-column[data-column-id="${columnId}"]`
+  );
+  const columnFooter = columnElement.querySelector(".column-footer");
+  const addCardBtn = columnFooter.querySelector(".add-card-btn");
+
+  const existingForm = columnElement.querySelector(".add-card-form-container");
+  if (existingForm) {
+    existingForm.remove();
+    addCardBtn.style.display = "";
+    return;
+  }
+
+  addCardBtn.style.display = "none";
+
+  const formContainer = document.createElement("div");
+  formContainer.className = "add-card-form-container";
+
+  columnFooter.appendChild(formContainer);
+
+  formContainer.innerHTML = `
+    <div class="add-card-form">
+      <textarea class="card-input" placeholder="Введите название или вставьте ссылку"></textarea>
+      <div class="add-card-form-actions">
+        <button class="add-card-submit-btn">Добавить карточку</button>
+        <button class="add-card-cancel-btn">&#10006;</button>
+      </div>
+    </div>
+  `;
+
+  const textarea = formContainer.querySelector(".card-input");
+  const submitBtn = formContainer.querySelector(".add-card-submit-btn");
+  const cancelBtn = formContainer.querySelector(".add-card-cancel-btn");
+
+  textarea.focus();
+
+  submitBtn.addEventListener("click", () => {
+    const cardTitle = textarea.value.trim();
+    if (!cardTitle) return;
+
+    submitNewCard(columnId, cardTitle);
+
+    formContainer.remove();
+    addCardBtn.style.display = "";
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    formContainer.remove();
+    addCardBtn.style.display = "";
+  });
+
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const cardTitle = textarea.value.trim();
+      if (cardTitle) {
+        submitNewCard(columnId, cardTitle);
+
+        formContainer.remove();
+        addCardBtn.style.display = "";
+      }
+    } else if (e.key === "Escape") {
+      formContainer.remove();
+      addCardBtn.style.display = "";
+    }
+  });
+}
+
+function submitNewCard(columnId, cardTitle) {
   try {
-    // Генерируем уникальный ID для карточки
-    const taskId = 'task_' + Date.now();
-    
-    // Создаем новую карточку
+    const cardDescription = "";
+
+    const taskId = "task_" + Date.now();
+
     const newTask = {
       id: taskId,
       title: cardTitle,
-      description: cardDescription || '',
-      createdAt: new Date().toISOString()
+      description: cardDescription,
+      createdAt: new Date().toISOString(),
+      completed: false,
     };
-    
-    // Получаем текущие данные доски
+
     const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Находим колонку для добавления карточки
-    const columnIndex = boardData.columns.findIndex(column => column.id === columnId);
+
+    const columnIndex = boardData.columns.findIndex(
+      (column) => column.id === columnId
+    );
     if (columnIndex === -1) {
-      console.error('Колонка не найдена');
+      console.error("Колонка не найдена");
       return;
     }
-    
-    // Добавляем карточку в колонку
+
     boardData.columns[columnIndex].tasks.push(newTask);
-    
-    // Обновляем данные доски
+
     updateBoardData(boardData);
-    
-    // Добавляем карточку в DOM без перезагрузки страницы
-    const columnCards = document.querySelector(`.column-cards[data-column-id="${columnId}"]`);
+
+    const columnCards = document.querySelector(
+      `.column-cards[data-column-id="${columnId}"]`
+    );
     if (columnCards) {
       const cardHtml = `
         <div class="kanban-card" draggable="true" data-task-id="${taskId}">
+          <div class="card-checkbox" data-task-id="${taskId}"></div>
           <div class="card-content">
             <div class="card-title">${cardTitle}</div>
-            ${cardDescription ? `<div class="card-description">${cardDescription}</div>` : ''}
-          </div>
-          <div class="card-actions">
-            <button class="card-edit-btn" data-task-id="${taskId}">✏️</button>
-            <button class="card-delete-btn" data-task-id="${taskId}">🗑️</button>
+            <div class="card-indicators">
+              <!-- Индикаторы будут добавлены, когда появятся описание или комментарии -->
+              <!-- Для новой карточки чек-листов нет, поэтому getChecklistStats вернет 0/0 и индикатор не отобразится -->
+            </div>
           </div>
         </div>
       `;
-      
-      const tempDiv = document.createElement('div');
+
+      const tempDiv = document.createElement("div");
       tempDiv.innerHTML = cardHtml;
       const cardElement = tempDiv.firstElementChild;
       columnCards.appendChild(cardElement);
-      
-      // Добавляем обработчики для новой карточки
-      cardElement.addEventListener('dragstart', handleDragStart);
-      cardElement.addEventListener('dragend', handleDragEnd);
-      // Добавляем новые обработчики для карточки
-      cardElement.addEventListener('dragover', handleDragOver);
-      cardElement.addEventListener('dragleave', handleDragLeave);
-      
-      // Добавляем обработчики для кнопок
-      const editBtn = cardElement.querySelector('.card-edit-btn');
-      editBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        editCard(taskId);
-      });
-      
-      const deleteBtn = cardElement.querySelector('.card-delete-btn');
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteCard(taskId);
+
+      cardElement.addEventListener("dragstart", handleDragStart);
+      cardElement.addEventListener("dragend", handleDragEnd);
+      cardElement.addEventListener("dragover", handleDragOver);
+      cardElement.addEventListener("dragleave", handleDragLeave);
+
+      const checkbox = cardElement.querySelector(".card-checkbox");
+      if (checkbox) {
+        checkbox.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const taskId = e.target.getAttribute("data-task-id");
+          toggleTaskCompletion(taskId);
+        });
+      }
+
+      cardElement.addEventListener("click", (e) => {
+        if (e.target.classList.contains("card-checkbox")) {
+          return;
+        }
+        const taskId = cardElement.getAttribute("data-task-id");
+        openCardDetailModal(taskId);
       });
     }
-    
   } catch (error) {
-    console.error('Ошибка при добавлении карточки:', error);
-    alert('Не удалось добавить карточку: ' + error.message);
+    console.error("Ошибка при добавлении карточки:", error);
+    alert("Не удалось добавить карточку: " + error.message);
   }
 }
 
-// Функция для редактирования карточки
 function editCard(taskId) {
   try {
-    // Получаем текущие данные доски
     const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Находим колонку и карточку для редактирования
+
     let foundTask = null;
     let columnIndex = -1;
     let taskIndex = -1;
-    
+
     for (let i = 0; i < boardData.columns.length; i++) {
       const column = boardData.columns[i];
-      const tIndex = column.tasks.findIndex(task => task.id === taskId);
-      
+      const tIndex = column.tasks.findIndex((task) => task.id === taskId);
+
       if (tIndex !== -1) {
         columnIndex = i;
         taskIndex = tIndex;
@@ -1045,378 +1676,3170 @@ function editCard(taskId) {
         break;
       }
     }
-    
+
     if (!foundTask) {
-      console.error('Карточка не найдена');
+      console.error("Карточка не найдена");
       return;
     }
-    
-    // Запрашиваем новое название карточки
-    const newTitle = prompt('Введите новое название карточки:', foundTask.title);
-    if (!newTitle || newTitle.trim() === '') return;
-    
-    // Запрашиваем новое описание карточки
-    const newDescription = prompt('Введите новое описание карточки:', foundTask.description || '');
-    
-    // Проверяем, были ли внесены изменения
-    if (newTitle === foundTask.title && newDescription === foundTask.description) return;
-    
-    // Обновляем карточку
-    boardData.columns[columnIndex].tasks[taskIndex].title = newTitle;
-    boardData.columns[columnIndex].tasks[taskIndex].description = newDescription;
-    boardData.columns[columnIndex].tasks[taskIndex].updatedAt = new Date().toISOString();
-    
-    // Обновляем данные доски
-    updateBoardData(boardData);
-    
-    // Обновляем карточку в DOM без перезагрузки страницы
-    const cardElement = document.querySelector(`.kanban-card[data-task-id="${taskId}"]`);
-    if (cardElement) {
-      const titleElement = cardElement.querySelector('.card-title');
-      if (titleElement) {
-        titleElement.textContent = newTitle;
+
+    const cardElement = document.querySelector(
+      `.kanban-card[data-task-id="${taskId}"]`
+    );
+    if (!cardElement) {
+      console.error("Элемент карточки не найден в DOM");
+      return;
+    }
+
+    const originalContent = cardElement.innerHTML;
+
+    cardElement.innerHTML = `
+      <div class="edit-card-form">
+        <textarea class="card-title-input" placeholder="Название карточки">${
+          foundTask.title
+        }</textarea>
+        <textarea class="card-description-input" placeholder="Описание (необязательно)">${
+          foundTask.description || ""
+        }</textarea>
+        <div class="edit-card-actions">
+          <button class="edit-card-save-btn">Сохранить</button>
+          <button class="edit-card-cancel-btn">Отмена</button>
+        </div>
+      </div>
+    `;
+
+    cardElement.classList.add("editing");
+
+    const titleInput = cardElement.querySelector(".card-title-input");
+    const descriptionInput = cardElement.querySelector(
+      ".card-description-input"
+    );
+    const saveBtn = cardElement.querySelector(".edit-card-save-btn");
+    const cancelBtn = cardElement.querySelector(".edit-card-cancel-btn");
+
+    titleInput.focus();
+    titleInput.select();
+
+    saveBtn.addEventListener("click", () => {
+      const newTitle = titleInput.value.trim();
+      const newDescription = descriptionInput.value.trim();
+
+      if (!newTitle) {
+        alert("Название карточки не может быть пустым");
+        return;
       }
-      
-      let descriptionElement = cardElement.querySelector('.card-description');
-      if (newDescription) {
-        if (descriptionElement) {
-          descriptionElement.textContent = newDescription;
-        } else {
-          // Создаем элемент описания, если его нет
-          descriptionElement = document.createElement('div');
-          descriptionElement.className = 'card-description';
-          descriptionElement.textContent = newDescription;
-          cardElement.querySelector('.card-content').appendChild(descriptionElement);
+
+      if (
+        newTitle === foundTask.title &&
+        newDescription === foundTask.description
+      ) {
+        cardElement.innerHTML = originalContent;
+        cardElement.classList.remove("editing");
+        return;
+      }
+
+      boardData.columns[columnIndex].tasks[taskIndex].title = newTitle;
+      boardData.columns[columnIndex].tasks[taskIndex].description =
+        newDescription;
+      boardData.columns[columnIndex].tasks[taskIndex].updatedAt =
+        new Date().toISOString();
+
+      updateBoardData(boardData);
+
+      const commentsCount = boardData.columns[columnIndex].tasks[taskIndex]
+        .comments
+        ? boardData.columns[columnIndex].tasks[taskIndex].comments.length
+        : 0;
+      const hasDescription = newDescription !== "";
+
+      const { totalChecklistItems, completedChecklistItems } =
+        getChecklistStats(boardData.columns[columnIndex].tasks[taskIndex]);
+
+      cardElement.classList.remove("editing");
+      cardElement.innerHTML = `
+        <div class="card-checkbox ${
+          foundTask.completed ? "checked" : ""
+        }" data-task-id="${taskId}"></div>
+        <div class="card-content">
+          <div class="card-title">${newTitle}</div>
+          <div class="card-indicators">
+            ${
+              hasDescription
+                ? `<div class="card-indicator description-indicator" title="Карточка содержит описание">
+                <i class="fas fa-align-left"></i>
+              </div>`
+                : ""
+            }
+            ${
+              commentsCount > 0
+                ? `<div class="card-indicator comments-indicator" title="Комментарии: ${commentsCount}">
+                <i class="fas fa-comment"></i>
+                <span class="indicator-count">${commentsCount}</span>
+              </div>`
+                : ""
+            }
+            ${
+              totalChecklistItems > 0
+                ? `<div class="card-indicator checklist-indicator" title="Чек-лист: ${completedChecklistItems}/${totalChecklistItems}">
+                <i class="fas fa-list-check"></i>
+                <span class="indicator-count">${completedChecklistItems}/${totalChecklistItems}</span>
+              </div>`
+                : ""
+            }
+          </div>
+        </div>
+      `;
+
+      cardElement.addEventListener("dragstart", handleDragStart);
+      cardElement.addEventListener("dragend", handleDragEnd);
+      cardElement.addEventListener("dragover", handleDragOver);
+      cardElement.addEventListener("dragleave", handleDragLeave);
+
+      const checkbox = cardElement.querySelector(".card-checkbox");
+      if (checkbox) {
+        checkbox.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleTaskCompletion(taskId);
+        });
+      }
+
+      cardElement.addEventListener("click", (e) => {
+        if (e.target.classList.contains("card-checkbox")) {
+          return;
         }
-      } else if (descriptionElement) {
-        // Удаляем элемент описания, если новое описание пустое
-        descriptionElement.remove();
+        openCardDetailModal(taskId);
+      });
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      cardElement.innerHTML = originalContent;
+      cardElement.classList.remove("editing");
+
+      cardElement.addEventListener("dragstart", handleDragStart);
+      cardElement.addEventListener("dragend", handleDragEnd);
+      cardElement.addEventListener("dragover", handleDragOver);
+      cardElement.addEventListener("dragleave", handleDragLeave);
+
+      cardElement.addEventListener("click", (e) => {
+        if (e.target.classList.contains("card-checkbox")) {
+          return;
+        }
+        openCardDetailModal(taskId);
+      });
+    });
+
+    function handleKeydown(e) {
+      if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        saveBtn.click();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelBtn.click();
       }
     }
-    
+
+    titleInput.addEventListener("keydown", handleKeydown);
+    descriptionInput.addEventListener("keydown", handleKeydown);
+
+    cardElement.setAttribute("draggable", "false");
   } catch (error) {
-    console.error('Ошибка при редактировании карточки:', error);
-    alert('Не удалось отредактировать карточку: ' + error.message);
+    console.error("Ошибка при редактировании карточки:", error);
+    alert("Не удалось отредактировать карточку: " + error.message);
   }
 }
 
-// Функция для удаления карточки
 function deleteCard(taskId) {
-  // Запрашиваем подтверждение удаления
-  const confirmed = window.confirm('Вы уверены, что хотите удалить эту карточку?');
-  if (!confirmed) return;
-  
-  try {
-    // Получаем текущие данные доски
-    const boardData = JSON.parse(currentBoardData.boardData);
-    
-    // Находим колонку и карточку для удаления
-    let columnIndex = -1;
-    let taskIndex = -1;
-    
-    for (let i = 0; i < boardData.columns.length; i++) {
-      const column = boardData.columns[i];
-      const tIndex = column.tasks.findIndex(task => task.id === taskId);
-      
-      if (tIndex !== -1) {
-        columnIndex = i;
-        taskIndex = tIndex;
-        break;
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "modal-overlay";
+
+  modalOverlay.innerHTML = `
+    <div class="modal-container delete-card-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Удаление карточки</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Вы уверены, что хотите удалить эту карточку?</p>
+        <p class="delete-warning">Это действие нельзя отменить.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-secondary-btn" id="cancelDelete">Отмена</button>
+        <button class="modal-danger-btn" id="confirmDelete">Удалить</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modalOverlay);
+
+  setTimeout(() => {
+    modalOverlay.classList.add("active");
+  }, 10);
+
+  const closeModal = () => {
+    modalOverlay.classList.remove("active");
+    setTimeout(() => {
+      document.body.removeChild(modalOverlay);
+    }, 300);
+  };
+
+  modalOverlay
+    .querySelector(".modal-close")
+    .addEventListener("click", closeModal);
+
+  document.getElementById("cancelDelete").addEventListener("click", closeModal);
+
+  document.getElementById("confirmDelete").addEventListener("click", () => {
+    try {
+      const boardData = JSON.parse(currentBoardData.boardData);
+
+      let columnIndex = -1;
+      let taskIndex = -1;
+
+      for (let i = 0; i < boardData.columns.length; i++) {
+        const column = boardData.columns[i];
+        const tIndex = column.tasks.findIndex((task) => task.id === taskId);
+
+        if (tIndex !== -1) {
+          columnIndex = i;
+          taskIndex = tIndex;
+          break;
+        }
       }
+
+      if (columnIndex === -1 || taskIndex === -1) {
+        console.error("Карточка не найдена");
+        closeModal();
+        return;
+      }
+
+      boardData.columns[columnIndex].tasks.splice(taskIndex, 1);
+
+      updateBoardData(boardData);
+
+      const cardElement = document.querySelector(
+        `.kanban-card[data-task-id="${taskId}"]`
+      );
+      if (cardElement) {
+        cardElement.remove();
+      }
+
+      closeModal();
+    } catch (error) {
+      console.error("Ошибка при удалении карточки:", error);
+      alert("Не удалось удалить карточку: " + error.message);
+      closeModal();
     }
-    
-    if (columnIndex === -1 || taskIndex === -1) {
-      console.error('Карточка не найдена');
-      return;
+  });
+
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) {
+      closeModal();
     }
-    
-    // Удаляем карточку
-    boardData.columns[columnIndex].tasks.splice(taskIndex, 1);
-    
-    // Обновляем данные доски
-    updateBoardData(boardData);
-    
-    // Удаляем карточку из DOM без перезагрузки страницы
-    const cardElement = document.querySelector(`.kanban-card[data-task-id="${taskId}"]`);
-    if (cardElement) {
-      cardElement.remove();
+  });
+
+  const handleKeydown = (e) => {
+    if (e.key === "Escape") {
+      closeModal();
+      document.removeEventListener("keydown", handleKeydown);
     }
-    
-  } catch (error) {
-    console.error('Ошибка при удалении карточки:', error);
-    alert('Не удалось удалить карточку: ' + error.message);
-  }
+  };
+
+  document.addEventListener("keydown", handleKeydown);
 }
 
-// Функция для обновления данных доски
 function updateBoardData(boardData) {
   try {
-    // Обновляем данные доски
     const stringifiedData = JSON.stringify(boardData);
     currentBoardData.boardData = stringifiedData;
-    
-    // Отображаем статус сохранения
-    const saveStatus = document.getElementById('saveStatus');
+
+    const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
-      saveStatus.textContent = 'Изменения не сохранены...';
-      saveStatus.classList.add('unsaved');
+      saveStatus.textContent = "Изменения не сохранены...";
+      saveStatus.classList.add("unsaved");
     }
-    
-    // Устанавливаем флаг изменения
+
     boardChanged = true;
-    
-    // Добавляем флаг несохраненных изменений в текущие данные
+
     currentBoardData._hasUnsavedChanges = true;
-    
-    console.log('Обновление данных доски:', currentBoardData.id);
-    
-    // Сразу обновляем кэш досок в памяти
+
+    console.log("Обновление данных доски:", currentBoardData.id);
+
     const boardsCache = getBoardsCache();
     if (boardsCache) {
-      const boardIndex = boardsCache.findIndex(board => board.id == currentBoardData.id);
+      const boardIndex = boardsCache.findIndex(
+        (board) => board.id == currentBoardData.id
+      );
       if (boardIndex !== -1) {
-        // Создаем копию объекта доски, чтобы избежать проблем с ссылками
         const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
-        updatedBoard._hasUnsavedChanges = true; // Явно устанавливаем флаг
-        
+        updatedBoard._hasUnsavedChanges = true;
+
         boardsCache[boardIndex] = updatedBoard;
         updateBoardsCache(boardsCache);
-        console.log('Кэш в памяти обновлен, индекс доски:', boardIndex);
+        console.log("Кэш в памяти обновлен, индекс доски:", boardIndex);
       } else {
-        console.warn('Доска не найдена в кэше памяти:', currentBoardData.id);
+        console.warn("Доска не найдена в кэше памяти:", currentBoardData.id);
       }
     } else {
-      console.warn('Кэш в памяти не инициализирован');
+      console.warn("Кэш в памяти не инициализирован");
     }
-    
-    // Обновляем кэш в localStorage
-    const localStorageCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-    const boardIndex = localStorageCache.findIndex(board => board.id == currentBoardData.id);
-    
+
+    const localStorageCache = JSON.parse(
+      localStorage.getItem("kanban_boards_cache") || "[]"
+    );
+    const boardIndex = localStorageCache.findIndex(
+      (board) => board.id == currentBoardData.id
+    );
+
     if (boardIndex !== -1) {
-      // Создаем копию объекта доски через строковую сериализацию
-      const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
-      updatedBoard._hasUnsavedChanges = true; // Явно устанавливаем флаг
-      
-      localStorageCache[boardIndex] = updatedBoard;
-      
-      // Сохраняем обновленный кэш в localStorage
-      localStorage.setItem('kanban_boards_cache', JSON.stringify(localStorageCache));
-      console.log('Кэш в localStorage обновлен, индекс доски:', boardIndex);
-      
-      // Проверяем, правильно ли сохранились данные
-      const afterUpdateCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-      const afterUpdateBoard = afterUpdateCache.find(b => b.id == currentBoardData.id);
-      if (afterUpdateBoard && afterUpdateBoard._hasUnsavedChanges) {
-        console.log('Проверка успешна: флаг несохраненных изменений установлен в кэше localStorage');
-      } else {
-        console.error('Ошибка: флаг несохраненных изменений не установлен в кэше localStorage после обновления');
-        console.log('Данные в кэше после обновления:', afterUpdateBoard);
-      }
-    } else {
-      console.warn('Доска не найдена в кэше localStorage:', currentBoardData.id);
-      
-      // Добавляем доску в кэш, если её там нет
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       updatedBoard._hasUnsavedChanges = true;
-      
+
+      localStorageCache[boardIndex] = updatedBoard;
+
+      localStorage.setItem(
+        "kanban_boards_cache",
+        JSON.stringify(localStorageCache)
+      );
+      console.log("Кэш в localStorage обновлен, индекс доски:", boardIndex);
+
+      const afterUpdateCache = JSON.parse(
+        localStorage.getItem("kanban_boards_cache") || "[]"
+      );
+      const afterUpdateBoard = afterUpdateCache.find(
+        (b) => b.id == currentBoardData.id
+      );
+      if (afterUpdateBoard && afterUpdateBoard._hasUnsavedChanges) {
+        console.log(
+          "Проверка успешна: флаг несохраненных изменений установлен в кэше localStorage"
+        );
+      } else if (afterUpdateBoard && afterUpdateBoard._hasUnsavedChanges) {
+        console.error(
+          "Ошибка: флаг несохраненных изменений остался в кэше после сохранения"
+        );
+      }
+    } else {
+      console.warn(
+        "Доска не найдена в кэше localStorage:",
+        currentBoardData.id
+      );
+
+      const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
+      updatedBoard._hasUnsavedChanges = true;
+
       localStorageCache.push(updatedBoard);
-      localStorage.setItem('kanban_boards_cache', JSON.stringify(localStorageCache));
-      console.log('Доска добавлена в кэш localStorage');
+      localStorage.setItem(
+        "kanban_boards_cache",
+        JSON.stringify(localStorageCache)
+      );
+      console.log("Доска добавлена в кэш localStorage");
     }
-    
-    // Сбрасываем предыдущий таймер автосохранения
+
     if (saveTimer) {
       clearTimeout(saveTimer);
     }
-    
-    // Устанавливаем новый таймер автосохранения (15 секунд)
+
     saveTimer = setTimeout(() => {
       saveBoardData();
     }, SAVE_DELAY);
-    
   } catch (error) {
-    console.error('Ошибка при обновлении данных доски:', error);
+    console.error("Ошибка при обновлении данных доски:", error);
   }
 }
 
-// Функция для сохранения данных доски на сервере
 async function saveBoardData() {
   if (!boardChanged) return;
-  
+
   try {
-    const saveStatus = document.getElementById('saveStatus');
+    const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
-      saveStatus.textContent = 'Сохранение...';
-      saveStatus.classList.remove('unsaved');
-      saveStatus.classList.add('saving');
+      saveStatus.textContent = "Сохранение...";
+      saveStatus.classList.remove("unsaved");
+      saveStatus.classList.add("saving");
     }
-    
-    // Проверяем, что доска существует
+
     if (!currentBoardData || !currentBoardData.id) {
-      throw new Error('Данные доски недоступны');
+      throw new Error("Данные доски недоступны");
     }
-    
-    // Создаем объект для обновления
+
     const updateData = {
       name: currentBoardData.name,
-      boardData: currentBoardData.boardData
+      boardData: currentBoardData.boardData,
     };
-    
-    console.log('Сохранение доски на сервере:', currentBoardData.id);
-    
-    // Отправляем запрос на обновление
+
+    console.log("Сохранение доски на сервере:", currentBoardData.id);
+
     await kanbanService.updateBoard(currentBoardData.id, updateData);
-    
-    // Удаляем флаг несохраненных изменений из текущих данных
+
     delete currentBoardData._hasUnsavedChanges;
-    
-    // Обновляем флаг изменения
+
     boardChanged = false;
-    
-    console.log('Доска успешно сохранена на сервере, обновляем кэши');
-    
-    // Обновляем кэш досок в памяти
+
+    console.log("Доска успешно сохранена на сервере, обновляем кэши");
+
     const boardsCache = getBoardsCache();
     if (boardsCache) {
-      const boardIndex = boardsCache.findIndex(board => board.id == currentBoardData.id);
+      const boardIndex = boardsCache.findIndex(
+        (board) => board.id == currentBoardData.id
+      );
       if (boardIndex !== -1) {
-        // Создаем новую копию объекта без свойства _hasUnsavedChanges
         const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
         boardsCache[boardIndex] = updatedBoard;
         updateBoardsCache(boardsCache);
-        console.log('Кэш в памяти обновлен после сохранения');
+        console.log("Кэш в памяти обновлен после сохранения");
       }
     }
-    
-    // Обновляем кэш в localStorage
-    const localStorageCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-    const boardIndex = localStorageCache.findIndex(board => board.id == currentBoardData.id);
+
+    const localStorageCache = JSON.parse(
+      localStorage.getItem("kanban_boards_cache") || "[]"
+    );
+    const boardIndex = localStorageCache.findIndex(
+      (board) => board.id == currentBoardData.id
+    );
     if (boardIndex !== -1) {
-      // Создаем новую копию объекта без свойства _hasUnsavedChanges
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       localStorageCache[boardIndex] = updatedBoard;
-      localStorage.setItem('kanban_boards_cache', JSON.stringify(localStorageCache));
-      console.log('Кэш в localStorage обновлен после сохранения');
-      
-      // Проверяем обновление кэша
-      const checkCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-      const checkBoard = checkCache.find(b => b.id == currentBoardData.id);
+      localStorage.setItem(
+        "kanban_boards_cache",
+        JSON.stringify(localStorageCache)
+      );
+      console.log("Кэш в localStorage обновлен после сохранения");
+
+      const checkCache = JSON.parse(
+        localStorage.getItem("kanban_boards_cache") || "[]"
+      );
+      const checkBoard = checkCache.find((b) => b.id == currentBoardData.id);
       if (checkBoard && !checkBoard._hasUnsavedChanges) {
-        console.log('Проверка успешна: флаг несохраненных изменений удален из кэша localStorage');
+        console.log(
+          "Проверка успешна: флаг несохраненных изменений удален из кэша localStorage"
+        );
       } else if (checkBoard && checkBoard._hasUnsavedChanges) {
-        console.error('Ошибка: флаг несохраненных изменений остался в кэше после сохранения');
+        console.error(
+          "Ошибка: флаг несохраненных изменений остался в кэше после сохранения"
+        );
       }
     } else {
-      console.warn('Доска не найдена в кэше localStorage:', currentBoardData.id);
-      
-      // Добавляем доску в кэш, если её там нет
+      console.warn(
+        "Доска не найдена в кэше localStorage:",
+        currentBoardData.id
+      );
+
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       localStorageCache.push(updatedBoard);
-      localStorage.setItem('kanban_boards_cache', JSON.stringify(localStorageCache));
-      console.log('Доска добавлена в кэш localStorage');
+      localStorage.setItem(
+        "kanban_boards_cache",
+        JSON.stringify(localStorageCache)
+      );
+      console.log("Доска добавлена в кэш localStorage");
     }
-    
-    // Обновляем статус сохранения
+
     if (saveStatus) {
-      saveStatus.textContent = 'Все изменения сохранены';
-      saveStatus.classList.remove('saving');
-      saveStatus.classList.remove('unsaved');
+      saveStatus.textContent = "Все изменения сохранены";
+      saveStatus.classList.remove("saving");
+      saveStatus.classList.remove("unsaved");
     }
-    
-    console.log('Доска успешно сохранена');
-    
+
+    console.log("Доска успешно сохранена");
   } catch (error) {
-    console.error('Ошибка при сохранении доски:', error);
-    
-    const saveStatus = document.getElementById('saveStatus');
+    console.error("Ошибка при сохранении доски:", error);
+
+    const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
-      saveStatus.textContent = 'Ошибка сохранения! Попробуйте снова.';
-      saveStatus.classList.remove('saving');
-      saveStatus.classList.add('error');
+      saveStatus.textContent = "Ошибка сохранения! Попробуйте снова.";
+      saveStatus.classList.remove("saving");
+      saveStatus.classList.add("error");
     }
   }
 }
 
-// Функция для принудительного сохранения доски при уходе со страницы
 function forceSaveBoardData() {
   if (boardChanged && currentBoardData) {
-    // Создаем объект для обновления
     const updateData = {
       name: currentBoardData.name,
-      boardData: currentBoardData.boardData
+      boardData: currentBoardData.boardData,
     };
-    
-    console.log('Принудительное сохранение доски:', currentBoardData.id);
-    
+
+    console.log("Принудительное сохранение доски:", currentBoardData.id);
+
     try {
-      // Используем синхронный запрос для гарантированного сохранения перед уходом со страницы
       const xhr = new XMLHttpRequest();
-      xhr.open('PUT', `/api/boards/${currentBoardData.id}`, false); // false = синхронный запрос
-      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.open("PUT", `/api/boards/${currentBoardData.id}`, false);
+      xhr.setRequestHeader("Content-Type", "application/json");
       xhr.send(JSON.stringify(updateData));
-      
+
       if (xhr.status >= 200 && xhr.status < 300) {
-        // Успешное сохранение
         delete currentBoardData._hasUnsavedChanges;
         boardChanged = false;
-        
-        console.log('Доска принудительно сохранена, обновляем кэши');
-        
-        // Обновляем кэш в памяти
+
+        console.log("Доска принудительно сохранена, обновляем кэши");
+
         const boardsCache = getBoardsCache();
         if (boardsCache) {
-          const boardIndex = boardsCache.findIndex(board => board.id == currentBoardData.id);
+          const boardIndex = boardsCache.findIndex(
+            (board) => board.id == currentBoardData.id
+          );
           if (boardIndex !== -1) {
-            // Создаем новую копию объекта без флага несохраненных изменений
             const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
             boardsCache[boardIndex] = updatedBoard;
             updateBoardsCache(boardsCache);
-            console.log('Кэш в памяти обновлен после принудительного сохранения');
+            console.log(
+              "Кэш в памяти обновлен после принудительного сохранения"
+            );
           }
         }
-        
-        // Обновляем кэш в localStorage
-        const localStorageCache = JSON.parse(localStorage.getItem('kanban_boards_cache') || '[]');
-        const boardIndex = localStorageCache.findIndex(board => board.id == currentBoardData.id);
+
+        const localStorageCache = JSON.parse(
+          localStorage.getItem("kanban_boards_cache") || "[]"
+        );
+        const boardIndex = localStorageCache.findIndex(
+          (board) => board.id == currentBoardData.id
+        );
         if (boardIndex !== -1) {
-          // Создаем новую копию объекта без флага несохраненных изменений
           const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
           localStorageCache[boardIndex] = updatedBoard;
-          localStorage.setItem('kanban_boards_cache', JSON.stringify(localStorageCache));
-          console.log('Кэш в localStorage обновлен после принудительного сохранения');
+          localStorage.setItem(
+            "kanban_boards_cache",
+            JSON.stringify(localStorageCache)
+          );
+          console.log(
+            "Кэш в localStorage обновлен после принудительного сохранения"
+          );
         }
-        
-        console.log('Доска принудительно сохранена перед выходом');
+
+        console.log("Доска принудительно сохранена перед выходом");
       } else {
-        console.error('Ошибка при принудительном сохранении доски');
+        console.error("Ошибка при принудительном сохранении доски");
       }
     } catch (error) {
-      console.error('Критическая ошибка при принудительном сохранении доски:', error);
+      console.error(
+        "Критическая ошибка при принудительном сохранении доски:",
+        error
+      );
     }
   }
 }
 
-// Функция для очистки слушателей событий доски
 export function cleanupBoardEventListeners() {
-  // Удаляем слушатель beforeunload
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-  
-  // Сохраняем изменения перед переходом, если они есть
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+
   if (boardChanged && currentBoardData) {
-    // Используем принудительное сохранение вместо обычного, так как оно синхронное
     forceSaveBoardData();
   }
-  
-  // Сбрасываем таймер автосохранения
+
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-  
-  // Сбрасываем переменные доски
+
   boardChanged = false;
   currentBoardData = null;
-  
-  console.log('Очистка слушателей событий доски выполнена');
-} 
+
+  console.log("Очистка слушателей событий доски выполнена");
+}
+
+function setupColumnDragAndDrop() {
+  const columns = document.querySelectorAll(".kanban-column");
+  const board = document.getElementById("kanbanBoard");
+
+  columns.forEach((column) => {
+    const columnHeader = column.querySelector(".column-header");
+    if (columnHeader) {
+      columnHeader.setAttribute("draggable", "true");
+      columnHeader.addEventListener("dragstart", handleColumnDragStart);
+      columnHeader.addEventListener("dragend", handleColumnDragEnd);
+    }
+  });
+
+  if (board) {
+    board.addEventListener("dragover", handleColumnDragOver);
+    board.addEventListener("dragenter", function (e) {
+      e.preventDefault();
+    });
+    board.addEventListener("drop", handleColumnDrop);
+  }
+}
+
+function handleColumnDragStart(e) {
+  const column = e.target.closest(".kanban-column");
+  if (!column) return;
+
+  try {
+    const ghostImage = column.cloneNode(true);
+
+    ghostImage.style.position = "absolute";
+    ghostImage.style.top = "-1000px";
+    ghostImage.style.opacity = "0.8";
+    ghostImage.style.transform = "scale(0.8)";
+    ghostImage.style.width = `${column.offsetWidth}px`;
+
+    document.body.appendChild(ghostImage);
+    e.dataTransfer.setDragImage(ghostImage, 10, 10);
+
+    setTimeout(() => {
+      document.body.removeChild(ghostImage);
+    }, 0);
+  } catch (error) {
+    console.error("Ошибка при создании превью перетаскивания:", error);
+  }
+
+  e.dataTransfer.setData("column-id", column.getAttribute("data-column-id"));
+
+  e.dataTransfer.setData("dragging-type", "column");
+
+  e.dataTransfer.effectAllowed = "move";
+
+  setTimeout(() => {
+    column.classList.add("dragging");
+
+    const board = document.getElementById("kanbanBoard");
+    if (board) {
+      board.setAttribute("data-dragging", "column");
+
+      board.classList.add("dragging-column");
+
+      const cardDropZones = document.querySelectorAll(".column-cards");
+      cardDropZones.forEach((zone) => {
+        zone.classList.add("no-drop-highlight");
+      });
+    }
+  }, 0);
+}
+
+function handleColumnDragEnd(e) {
+  const column = e.target.closest(".kanban-column");
+  if (!column) return;
+
+  column.classList.remove("dragging");
+
+  document
+    .querySelectorAll(".column-drop-indicator")
+    .forEach((el) => el.remove());
+
+  const board = document.getElementById("kanbanBoard");
+  if (board) {
+    board.removeAttribute("data-dragging");
+    board.classList.remove("dragging-column");
+
+    const cardDropZones = document.querySelectorAll(".column-cards");
+    cardDropZones.forEach((zone) => {
+      zone.classList.remove("no-drop-highlight");
+    });
+  }
+}
+
+function handleColumnDragOver(e) {
+  e.preventDefault();
+
+  const board = document.getElementById("kanbanBoard");
+  if (!board || board.getAttribute("data-dragging") !== "column") return;
+
+  if (e.target.classList.contains("column-drop-indicator")) {
+    return;
+  }
+
+  const columns = Array.from(
+    document.querySelectorAll(".kanban-column:not(.dragging)")
+  );
+  if (!columns.length) return;
+
+  const closestColumn = findClosestColumn(e.clientX, columns);
+  if (!closestColumn) return;
+
+  document
+    .querySelectorAll(".column-drop-indicator")
+    .forEach((el) => el.remove());
+
+  const rect = closestColumn.getBoundingClientRect();
+  const isLeftHalf = e.clientX < rect.left + rect.width / 2;
+
+  const indicator = document.createElement("div");
+  indicator.className = "column-drop-indicator";
+
+  if (isLeftHalf) {
+    closestColumn.before(indicator);
+  } else {
+    closestColumn.after(indicator);
+  }
+}
+
+function findClosestColumn(mouseX, columns) {
+  let closestColumn = null;
+  let closestDistance = Infinity;
+
+  columns.forEach((column) => {
+    const rect = column.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const distance = Math.abs(mouseX - centerX);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestColumn = column;
+    }
+  });
+
+  return closestColumn;
+}
+
+function handleColumnDrop(e) {
+  e.preventDefault();
+
+  const board = document.getElementById("kanbanBoard");
+  if (!board || board.getAttribute("data-dragging") !== "column") return;
+
+  const columnId = e.dataTransfer.getData("column-id");
+  if (!columnId) return;
+
+  const draggedColumn = document.querySelector(
+    `.kanban-column[data-column-id="${columnId}"]`
+  );
+  if (!draggedColumn) return;
+
+  const indicator = document.querySelector(".column-drop-indicator");
+  if (indicator) {
+    indicator.parentNode.insertBefore(draggedColumn, indicator);
+    indicator.remove();
+
+    updateColumnsOrder();
+  } else {
+    const columns = Array.from(
+      document.querySelectorAll(".kanban-column:not(.dragging)")
+    );
+    const closestColumn = findClosestColumn(e.clientX, columns);
+
+    if (closestColumn) {
+      const rect = closestColumn.getBoundingClientRect();
+      const isLeftHalf = e.clientX < rect.left + rect.width / 2;
+
+      if (isLeftHalf) {
+        closestColumn.before(draggedColumn);
+      } else {
+        closestColumn.after(draggedColumn);
+      }
+
+      updateColumnsOrder();
+    }
+  }
+
+  board.removeAttribute("data-dragging");
+  board.classList.remove("dragging-column");
+
+  const cardDropZones = document.querySelectorAll(".column-cards");
+  cardDropZones.forEach((zone) => {
+    zone.classList.remove("no-drop-highlight");
+  });
+}
+
+function updateColumnsOrder() {
+  try {
+    const boardData = JSON.parse(currentBoardData.boardData);
+
+    const columnElements = document.querySelectorAll(".kanban-column");
+    const newColumns = [];
+
+    columnElements.forEach((columnElement) => {
+      const columnId = columnElement.getAttribute("data-column-id");
+      const column = boardData.columns.find((c) => c.id === columnId);
+      if (column) {
+        newColumns.push(column);
+      }
+    });
+
+    boardData.columns = newColumns;
+
+    updateBoardData(boardData);
+
+    console.log("Порядок колонок обновлен");
+  } catch (error) {
+    console.error("Ошибка при обновлении порядка колонок:", error);
+  }
+}
+
+function copyColumn(columnId) {
+  try {
+    const boardData = JSON.parse(currentBoardData.boardData);
+
+    const sourceColumn = boardData.columns.find(
+      (column) => column.id === columnId
+    );
+    if (!sourceColumn) {
+      console.error("Колонка не найдена");
+      return;
+    }
+
+    const columnElement = document.querySelector(
+      `.kanban-column[data-column-id="${columnId}"]`
+    );
+    const columnHeader = columnElement.querySelector(".column-header");
+
+    const originalContent = columnHeader.innerHTML;
+
+    const inputContainer = document.createElement("div");
+    inputContainer.className = "column-copy-form";
+    inputContainer.innerHTML = `
+      <input type="text" class="column-copy-input" placeholder="Название новой колонки" value="${sourceColumn.name} (копия)">
+      <div class="column-copy-actions">
+        <button class="column-copy-save">Копировать</button>
+        <button class="column-copy-cancel">Отмена</button>
+      </div>
+    `;
+
+    columnHeader.innerHTML = "";
+    columnHeader.appendChild(inputContainer);
+
+    const inputElement = inputContainer.querySelector(".column-copy-input");
+    inputElement.focus();
+    inputElement.select();
+
+    const restoreHeaderWithEventListeners = () => {
+      columnHeader.innerHTML = originalContent;
+
+      const menuBtn = columnHeader.querySelector(".column-menu-btn");
+      if (menuBtn) {
+        menuBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const menu = columnHeader.querySelector(".column-menu");
+
+          document.querySelectorAll(".column-menu.active").forEach((m) => {
+            if (m !== menu) m.classList.remove("active");
+          });
+
+          menu.classList.toggle("active");
+        });
+      }
+
+      const menuItems = columnHeader.querySelectorAll(".column-menu-item");
+      menuItems.forEach((item) => {
+        item.addEventListener("click", (e) => {
+          const action = e.target.getAttribute("data-action");
+          const colId = e.target.getAttribute("data-column-id");
+
+          if (action === "edit") {
+            const titleElement = columnElement.querySelector(".column-title");
+            if (titleElement) {
+              startEditColumnTitle(titleElement, colId);
+            }
+          } else if (action === "copy") {
+            copyColumn(colId);
+          } else if (action === "delete") {
+            deleteColumn(colId);
+          }
+
+          const menu = e.target.closest(".column-menu");
+          if (menu) menu.classList.remove("active");
+        });
+      });
+
+      columnHeader.setAttribute("draggable", "true");
+      columnHeader.addEventListener("dragstart", handleColumnDragStart);
+      columnHeader.addEventListener("dragend", handleColumnDragEnd);
+
+      const titleContainer = columnHeader.querySelector(
+        ".column-title-container"
+      );
+      if (titleContainer) {
+        titleContainer.addEventListener("click", (e) => {
+          const titleElement = titleContainer.querySelector(".column-title");
+          if (titleElement) {
+            startEditColumnTitle(titleElement, columnId);
+          }
+        });
+      }
+    };
+
+    const saveButton = inputContainer.querySelector(".column-copy-save");
+    saveButton.addEventListener("click", () => {
+      const newColumnName = inputElement.value.trim();
+      if (newColumnName) {
+        createColumnCopy(sourceColumn, newColumnName);
+      }
+
+      restoreHeaderWithEventListeners();
+    });
+
+    const cancelButton = inputContainer.querySelector(".column-copy-cancel");
+    cancelButton.addEventListener("click", () => {
+      restoreHeaderWithEventListeners();
+    });
+
+    inputElement.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const newColumnName = inputElement.value.trim();
+        if (newColumnName) {
+          createColumnCopy(sourceColumn, newColumnName);
+        }
+
+        restoreHeaderWithEventListeners();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+
+        restoreHeaderWithEventListeners();
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка при копировании колонки:", error);
+    alert("Не удалось копировать колонку: " + error.message);
+  }
+}
+
+function createColumnCopy(sourceColumn, newColumnName) {
+  try {
+    const newColumnId = "column_" + Date.now();
+
+    const columnCopy = {
+      id: newColumnId,
+      name: newColumnName,
+      tasks: JSON.parse(JSON.stringify(sourceColumn.tasks)),
+    };
+
+    columnCopy.tasks.forEach((task) => {
+      task.id = "task_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    });
+
+    const boardData = JSON.parse(currentBoardData.boardData);
+
+    const sourceColumnIndex = boardData.columns.findIndex(
+      (col) => col.id === sourceColumn.id
+    );
+
+    boardData.columns.splice(sourceColumnIndex + 1, 0, columnCopy);
+
+    updateBoardData(boardData);
+
+    const kanbanBoard = document.getElementById("kanbanBoard");
+    const sourceColumnElement = document.querySelector(
+      `.kanban-column[data-column-id="${sourceColumn.id}"]`
+    );
+
+    const cardsHtml = columnCopy.tasks
+      .map(
+        (task) => `
+      <div class="kanban-card" draggable="true" data-task-id="${task.id}">
+        <div class="card-content">
+          <div class="card-title">${task.title}</div>
+          ${
+            task.description
+              ? `<div class="card-description">${task.description}</div>`
+              : ""
+          }
+        </div>
+      </div>
+    `
+      )
+      .join("");
+
+    const newColumnHtml = `
+      <div class="kanban-column" data-column-id="${newColumnId}">
+        <div class="column-header">
+          <div class="column-title-container">
+            <h3 class="column-title" data-column-id="${newColumnId}">${newColumnName}</h3>
+          </div>
+          <div class="column-actions">
+            <button class="column-menu-btn" data-column-id="${newColumnId}">⋮</button>
+            <div class="column-menu" data-column-id="${newColumnId}">
+              <div class="column-menu-item" data-action="edit" data-column-id="${newColumnId}">Редактировать</div>
+              <div class="column-menu-item" data-action="copy" data-column-id="${newColumnId}">Копировать</div>
+              <div class="column-menu-item" data-action="delete" data-column-id="${newColumnId}">Удалить</div>
+            </div>
+          </div>
+        </div>
+        <div class="column-cards" data-column-id="${newColumnId}">
+          ${cardsHtml}
+        </div>
+        <div class="column-footer">
+          <button class="add-card-btn" data-column-id="${newColumnId}">+ Добавить карточку</button>
+        </div>
+      </div>
+    `;
+
+    const newColumnElement = document.createElement("div");
+    newColumnElement.innerHTML = newColumnHtml;
+    const newColumn = newColumnElement.firstElementChild;
+
+    if (sourceColumnElement.nextElementSibling) {
+      kanbanBoard.insertBefore(
+        newColumn,
+        sourceColumnElement.nextElementSibling
+      );
+    } else {
+      kanbanBoard.insertBefore(
+        newColumn,
+        document.querySelector(".add-column-container")
+      );
+    }
+
+    setupColumnEventListeners(newColumn);
+  } catch (error) {
+    console.error("Ошибка при создании копии колонки:", error);
+    alert("Не удалось создать копию колонки: " + error.message);
+  }
+}
+
+function setupColumnEventListeners(columnElement) {
+  const addCardBtn = columnElement.querySelector(".add-card-btn");
+  const columnId = columnElement.getAttribute("data-column-id");
+
+  addCardBtn.addEventListener("click", () => {
+    addNewCard(columnId);
+  });
+
+  const columnTitleContainer = columnElement.querySelector(
+    ".column-title-container"
+  );
+  columnTitleContainer.addEventListener("click", (e) => {
+    const titleElement = columnTitleContainer.querySelector(".column-title");
+    if (titleElement) {
+      startEditColumnTitle(titleElement, columnId);
+    }
+  });
+
+  const menuBtn = columnElement.querySelector(".column-menu-btn");
+  menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = columnElement.querySelector(".column-menu");
+
+    document.querySelectorAll(".column-menu.active").forEach((m) => {
+      if (m !== menu) m.classList.remove("active");
+    });
+
+    menu.classList.toggle("active");
+  });
+
+  const menuItems = columnElement.querySelectorAll(".column-menu-item");
+  menuItems.forEach((item) => {
+    item.addEventListener("click", (e) => {
+      const action = e.target.getAttribute("data-action");
+      const colId = e.target.getAttribute("data-column-id");
+
+      if (action === "edit") {
+        const titleElement = columnElement.querySelector(".column-title");
+        if (titleElement) {
+          startEditColumnTitle(titleElement, colId);
+        }
+      } else if (action === "copy") {
+        copyColumn(colId);
+      } else if (action === "delete") {
+        deleteColumn(colId);
+      }
+
+      const menu = e.target.closest(".column-menu");
+      if (menu) menu.classList.remove("active");
+    });
+  });
+
+  const columnHeader = columnElement.querySelector(".column-header");
+  columnHeader.setAttribute("draggable", "true");
+  columnHeader.addEventListener("dragstart", handleColumnDragStart);
+  columnHeader.addEventListener("dragend", handleColumnDragEnd);
+
+  const dropZone = columnElement.querySelector(".column-cards");
+  dropZone.addEventListener("dragover", handleDragOver);
+  dropZone.addEventListener("dragenter", handleDragEnter);
+  dropZone.addEventListener("dragleave", handleDragLeave);
+  dropZone.addEventListener("drop", handleDrop);
+
+  const cards = columnElement.querySelectorAll(".kanban-card");
+  cards.forEach((card) => {
+    card.addEventListener("dragstart", handleDragStart);
+    card.addEventListener("dragend", handleDragEnd);
+    card.addEventListener("dragover", handleDragOver);
+    card.addEventListener("dragleave", handleDragLeave);
+
+    const taskId = card.getAttribute("data-task-id");
+
+    card.addEventListener("click", () => {
+      openCardDetailModal(taskId);
+    });
+  });
+}
+
+function openCardDetailModal(taskId) {
+  try {
+    const boardData = JSON.parse(currentBoardData.boardData);
+
+    let foundTask = null;
+    let columnName = "";
+    let columnId = "";
+
+    for (const column of boardData.columns) {
+      const task = column.tasks.find((t) => t.id === taskId);
+      if (task) {
+        foundTask = task;
+        columnName = column.name;
+        columnId = column.id;
+        break;
+      }
+    }
+
+    if (!foundTask) {
+      console.error("Карточка не найдена");
+      return;
+    }
+
+    if (!foundTask.comments) {
+      foundTask.comments = [];
+    }
+    if (!foundTask.checklists) {
+      foundTask.checklists = [];
+    }
+
+    const createdDate = new Date(foundTask.createdAt);
+    const formattedDate = createdDate.toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const currentUser = JSON.parse(localStorage.getItem("auth_user") || "{}");
+
+    console.log(currentUser);
+    const currentUsername =
+      currentUser.fullname ||
+      (
+        (currentUser.firstName || "") +
+        " " +
+        (currentUser.lastName || "")
+      ).trim() ||
+      currentUser.name ||
+      "Пользователь";
+
+    const modalOverlay = document.createElement("div");
+    modalOverlay.className = "modal-overlay";
+
+    modalOverlay.innerHTML = `
+      <div class="modal-container card-detail-modal">
+        <div class="card-modal-header">
+          <h3 class="card-modal-title card-title-editable" data-task-id="${taskId}">${
+      foundTask.title
+    }</h3>
+          <button class="card-modal-close">&times;</button>
+        </div>
+        <div class="card-modal-body">
+          <div class="card-modal-main-content">
+            <div class="card-detail-section">
+              <div class="card-list-row">
+                <div class="card-detail-label">В списке:</div>
+                <div class="card-detail-value list-value">${columnName}</div>
+              </div>
+            </div>
+            
+            <div class="card-detail-section">
+              <div class="card-detail-label">Описание</div>
+              <div class="card-detail-value card-description-editable" data-task-id="${taskId}">${formatTextWithMentions(
+      foundTask.description || "Добавить более подробное описание..."
+    )}</div>
+            </div>
+
+            ${
+              foundTask.checklists && foundTask.checklists.length > 0
+                ? `
+            <div class="card-detail-section">
+              <div class="card-detail-label">Чек-листы</div>
+              <div class="card-checklists-container" data-task-id="${taskId}">
+                ${foundTask.checklists
+                  .map((checklist) => renderChecklistHTML(checklist, taskId))
+                  .join("")}
+              </div>
+            </div>
+            `
+                : `
+            <div class="card-checklists-container" data-task-id="${taskId}">
+              ${foundTask.checklists
+                .map((checklist) => renderChecklistHTML(checklist, taskId))
+                .join("")}
+            </div>
+            `
+            }
+            
+            <div class="card-detail-section">
+              <div class="card-detail-label">Комментарии</div>
+              <div class="card-activity-wrapper">
+                <div class="comment-form">
+                  <div class="comment-avatar">${currentUsername.substring(
+                    0,
+                    2
+                  )}</div>
+                  <textarea class="card-comment-input" placeholder="Напишите комментарий..."></textarea>
+                </div>
+                <button class="comment-submit-btn">Отправить</button>
+              </div>
+              <div class="card-comments-container">
+                ${
+                  foundTask.comments && foundTask.comments.length > 0
+                    ? [...foundTask.comments]
+                        .reverse()
+                        .map(
+                          (comment) => `
+                    <div class="card-comment" data-comment-id="${comment.id}">
+                      <div class="comment-avatar">${comment.author.substring(
+                        0,
+                        2
+                      )}</div>
+                      <div class="comment-content">
+                        <div class="comment-header">
+                          <span class="comment-author">${comment.author}</span>
+                          <span class="comment-date">${new Date(
+                            comment.createdAt
+                          ).toLocaleString("ru-RU")}</span>
+                        </div>
+                        <div class="comment-text">${formatTextWithMentions(
+                          comment.text
+                        )}</div>
+                        <div class="comment-actions">
+                          ${
+                            comment.authorId === currentUser.id
+                              ? `
+                            <button class="comment-edit-btn" data-comment-id="${comment.id}">Редактировать</button>
+                            <button class="comment-delete-btn" data-comment-id="${comment.id}">Удалить</button>
+                          `
+                              : ""
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  `
+                        )
+                        .join("")
+                    : '<div class="no-comments">Нет комментариев</div>'
+                }
+              </div>
+            </div>
+          </div>
+          
+          <div class="card-modal-sidebar">
+            <div class="sidebar-section">
+              <h4 class="sidebar-title">Действия</h4>
+              <div class="sidebar-actions">
+                <div class="task-completion-toggle">
+                  <div class="card-checkbox ${
+                    foundTask.completed ? "checked" : ""
+                  }" data-task-id="${taskId}"></div>
+                  <span class="task-label">Отметить как выполненное</span>
+                </div>
+                <button class="sidebar-btn add-checklist-btn" data-task-id="${taskId}"><i class="fas fa-tasks"></i> Добавить чек-лист</button>
+                <button class="sidebar-btn set-card-due-date-btn" data-task-id="${taskId}"><i class="fas fa-calendar-alt"></i> Установить дату</button>
+                <button class="sidebar-btn archive-card-btn" data-task-id="${taskId}"><i class="fas fa-archive"></i> Архивировать</button>
+                <button class="sidebar-btn delete-card-btn" data-task-id="${taskId}">🗑️ Удалить карточку</button>
+              </div>
+            </div>
+            <div class="sidebar-section">
+              <h4 class="sidebar-title">Добавлено</h4>
+              <div class="sidebar-date">${formattedDate}</div>
+            </div>
+          </div>
+        </div>
+        <div class="card-modal-footer">
+          <!-- Нижний колонтитул, если нужен -->
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modalOverlay);
+
+    setTimeout(() => {
+      modalOverlay.classList.add("active");
+
+      foundTask.checklists.forEach((checklist) => {
+        const checklistElement = modalOverlay.querySelector(
+          `.checklist-section[data-checklist-id="${checklist.id}"]`
+        );
+        if (checklistElement) {
+          updateChecklistProgress(checklistElement, checklist);
+          setupChecklistEventListeners(checklistElement, taskId, checklist.id);
+        }
+      });
+    }, 10);
+
+    const closeModal = () => {
+      modalOverlay.classList.remove("active");
+      setTimeout(() => {
+        document.body.removeChild(modalOverlay);
+      }, 300);
+    };
+
+    modalOverlay
+      .querySelector(".card-modal-close")
+      .addEventListener("click", closeModal);
+
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) {
+        closeModal();
+      }
+    });
+
+    const titleElement = modalOverlay.querySelector(".card-title-editable");
+    titleElement.addEventListener("click", function (e) {
+      if (this.querySelector(".card-title-input-inline")) {
+        return;
+      }
+
+      const currentTitle = this.textContent;
+      const input = document.createElement("input");
+      input.value = currentTitle;
+      input.className = "card-title-input-inline";
+      this.innerHTML = "";
+      this.appendChild(input);
+      input.focus();
+
+      const valueLength = input.value.length;
+      input.setSelectionRange(valueLength, valueLength);
+
+      const saveTitle = () => {
+        const newTitle = input.value.trim();
+        if (newTitle) {
+          const boardData = JSON.parse(currentBoardData.boardData);
+          for (const column of boardData.columns) {
+            const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
+            if (taskIndex !== -1) {
+              column.tasks[taskIndex].title = newTitle;
+              column.tasks[taskIndex].updatedAt = new Date().toISOString();
+
+              titleElement.textContent = newTitle;
+
+              const cardElement = document.querySelector(
+                `.kanban-card[data-task-id="${taskId}"] .card-title`
+              );
+              if (cardElement) {
+                cardElement.textContent = newTitle;
+              }
+
+              updateBoardData(boardData);
+              break;
+            }
+          }
+        } else {
+          titleElement.textContent = currentTitle;
+        }
+      };
+
+      input.addEventListener("blur", saveTitle);
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          saveTitle();
+        } else if (e.key === "Escape") {
+          titleElement.textContent = currentTitle;
+        }
+      });
+
+      e.stopPropagation();
+    });
+
+    const descriptionElement = modalOverlay.querySelector(
+      ".card-description-editable"
+    );
+    descriptionElement.addEventListener("click", function (e) {
+      if (this.querySelector(".card-description-textarea-inline")) {
+        return;
+      }
+
+      const editSessionId = "edit_" + Date.now();
+      this.setAttribute("data-edit-session", editSessionId);
+
+      const currentDescription =
+        this.textContent === "Добавить более подробное описание..."
+          ? ""
+          : this.textContent;
+      const textarea = document.createElement("textarea");
+      textarea.value = currentDescription;
+      textarea.className = "card-description-textarea-inline";
+      textarea.placeholder = "Добавить более подробное описание...";
+
+      const originalContent = this.innerHTML;
+
+      this.innerHTML = "";
+      this.appendChild(textarea);
+      textarea.focus();
+
+      textarea.addEventListener("input", handleMentionTextareaInput);
+      textarea.addEventListener("keydown", handleMentionTextareaKeydown);
+
+      textarea.addEventListener("blur", (event) => {
+        setTimeout(() => {
+          const activeElement = document.activeElement;
+
+          if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
+            return;
+          }
+
+          if (
+            mentionsDropdown &&
+            mentionsDropdown.style.display === "block" &&
+            currentMentionTextarea === textarea
+          ) {
+            hideMentionsDropdown();
+          }
+        }, 100);
+      });
+
+      const saveDescription = () => {
+        if (this.getAttribute("data-edit-session") !== editSessionId) {
+          return;
+        }
+
+        const newDescription = textarea.value.trim();
+
+        this.innerHTML = "";
+
+        this.removeAttribute("data-edit-session");
+
+        const boardData = JSON.parse(currentBoardData.boardData);
+        for (const column of boardData.columns) {
+          const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
+          if (taskIndex !== -1) {
+            column.tasks[taskIndex].description = newDescription;
+            column.tasks[taskIndex].updatedAt = new Date().toISOString();
+
+            this.innerHTML = formatTextWithMentions(
+              newDescription || "Добавить более подробное описание..."
+            );
+
+            const cardElement = document.querySelector(
+              `.kanban-card[data-task-id="${taskId}"] .card-description`
+            );
+            if (cardElement) {
+              if (newDescription) {
+                if (cardElement) {
+                  cardElement.textContent = newDescription;
+                } else {
+                  const cardContent = document.querySelector(
+                    `.kanban-card[data-task-id="${taskId}"] .card-content`
+                  );
+                  if (cardContent) {
+                    const descElement = document.createElement("div");
+                    descElement.className = "card-description";
+                    descElement.textContent = newDescription;
+                    cardContent.appendChild(descElement);
+                  }
+                }
+              } else if (cardElement) {
+                cardElement.remove();
+              }
+            }
+
+            updateBoardData(boardData);
+
+            updateCardIndicators(taskId);
+            break;
+          }
+        }
+      };
+
+      const cancelEdit = () => {
+        if (this.getAttribute("data-edit-session") !== editSessionId) {
+          return;
+        }
+
+        this.removeAttribute("data-edit-session");
+
+        this.innerHTML = originalContent;
+      };
+
+      const actionButtons = document.createElement("div");
+      actionButtons.className = "description-edit-actions";
+      actionButtons.innerHTML = `
+        <button class="description-save-btn">Сохранить</button>
+        <button class="description-cancel-btn">Отмена</button>
+      `;
+      this.appendChild(actionButtons);
+
+      const saveBtn = actionButtons.querySelector(".description-save-btn");
+      const cancelBtn = actionButtons.querySelector(".description-cancel-btn");
+
+      saveBtn.addEventListener(
+        "click",
+        function (e) {
+          e.stopPropagation();
+          saveDescription();
+        },
+        { once: true }
+      );
+
+      cancelBtn.addEventListener(
+        "click",
+        function (e) {
+          e.stopPropagation();
+          cancelEdit();
+        },
+        { once: true }
+      );
+
+      e.stopPropagation();
+    });
+
+    const commentInput = modalOverlay.querySelector(".card-comment-input");
+    const commentSubmitBtn = modalOverlay.querySelector(".comment-submit-btn");
+
+    if (commentInput) {
+      console.log(
+        "Mentions: Initializing event listeners for comment input:",
+        commentInput
+      );
+      commentInput.addEventListener("input", handleMentionTextareaInput);
+      commentInput.addEventListener("keydown", handleMentionTextareaKeydown);
+      commentInput.addEventListener("focus", () => {
+        console.log(
+          "Mentions: Comment input focused. CurrentMentionTextarea:",
+          currentMentionTextarea
+        );
+      });
+      commentInput.addEventListener("blur", (event) => {
+        console.log(
+          "Mentions: Comment input blurred. CurrentMentionTextarea:",
+          currentMentionTextarea
+        );
+        setTimeout(() => {
+          const activeElement = document.activeElement;
+
+          if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
+            console.log(
+              "Mentions: Blur on comment input, but focus is within the mentions dropdown. Not hiding."
+            );
+            return;
+          }
+
+          if (
+            mentionsDropdown &&
+            mentionsDropdown.style.display === "block" &&
+            currentMentionTextarea === commentInput
+          ) {
+            console.log(
+              "Mentions: Hiding dropdown due to blur on comment input."
+            );
+            hideMentionsDropdown();
+          }
+        }, 150);
+      });
+    } else {
+      console.error(
+        "Mentions: Comment input field (.card-comment-input) not found in modalOverlay for initialization."
+      );
+    }
+
+    commentSubmitBtn.addEventListener("click", async () => {
+      const commentText = commentInput.value.trim();
+      if (!commentText) return;
+
+      try {
+        let userData;
+        try {
+          userData = await authService.getUserProfile();
+        } catch (error) {
+          console.error(
+            "Не удалось получить данные пользователя через API:",
+            error
+          );
+
+          userData = authService.getUser();
+
+          if (!userData) {
+            throw new Error(
+              "Не удалось получить данные пользователя для комментария"
+            );
+          }
+        }
+
+        const currentUsername =
+          userData.fullname ||
+          (
+            (userData.firstName || "") +
+            " " +
+            (userData.lastName || "")
+          ).trim() ||
+          userData.name ||
+          "Пользователь";
+
+        const newComment = {
+          id: "comment_" + Date.now(),
+          author: currentUsername,
+          authorId: userData.id,
+          text: commentText,
+          createdAt: new Date().toISOString(),
+        };
+
+        const boardData = JSON.parse(currentBoardData.boardData);
+        for (const column of boardData.columns) {
+          const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
+          if (taskIndex !== -1) {
+            if (!column.tasks[taskIndex].comments) {
+              column.tasks[taskIndex].comments = [];
+            }
+
+            column.tasks[taskIndex].comments.push(newComment);
+            column.tasks[taskIndex].updatedAt = new Date().toISOString();
+
+            const commentsContainer = modalOverlay.querySelector(
+              ".card-comments-container"
+            );
+
+            const noComments = commentsContainer.querySelector(".no-comments");
+            if (noComments) {
+              noComments.remove();
+            }
+
+            const commentElement = document.createElement("div");
+            commentElement.className = "card-comment";
+            commentElement.setAttribute("data-comment-id", newComment.id);
+            commentElement.innerHTML = `
+              <div class="comment-avatar">${newComment.author.substring(
+                0,
+                2
+              )}</div>
+              <div class="comment-content">
+                <div class="comment-header">
+                  <span class="comment-author">${newComment.author}</span>
+                  <span class="comment-date">${new Date(
+                    newComment.createdAt
+                  ).toLocaleString("ru-RU")}</span>
+                </div>
+                <div class="comment-text">${formatTextWithMentions(
+                  newComment.text
+                )}</div>
+                <div class="comment-actions">
+                  <button class="comment-edit-btn" data-comment-id="${
+                    newComment.id
+                  }">Редактировать</button>
+                  <button class="comment-delete-btn" data-comment-id="${
+                    newComment.id
+                  }">Удалить</button>
+                </div>
+              </div>
+            `;
+
+            commentsContainer.insertBefore(
+              commentElement,
+              commentsContainer.firstChild
+            );
+
+            const editBtn = commentElement.querySelector(".comment-edit-btn");
+            const deleteBtn = commentElement.querySelector(
+              ".comment-delete-btn"
+            );
+
+            editBtn.addEventListener("click", () => {
+              editComment(taskId, newComment.id, commentElement);
+            });
+
+            deleteBtn.addEventListener("click", () => {
+              deleteComment(taskId, newComment.id, commentElement);
+            });
+
+            commentInput.value = "";
+
+            updateBoardData(boardData);
+            break;
+          }
+        }
+      } catch (error) {
+        console.error("Ошибка при добавлении комментария:", error);
+        alert("Не удалось добавить комментарий: " + error.message);
+      }
+    });
+
+    commentInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        commentSubmitBtn.click();
+      }
+    });
+
+    const editBtns = modalOverlay.querySelectorAll(".comment-edit-btn");
+    const deleteBtns = modalOverlay.querySelectorAll(".comment-delete-btn");
+
+    editBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const commentId = btn.getAttribute("data-comment-id");
+        const commentElement = modalOverlay.querySelector(
+          `.card-comment[data-comment-id="${commentId}"]`
+        );
+        editComment(taskId, commentId, commentElement);
+      });
+    });
+
+    deleteBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const commentId = btn.getAttribute("data-comment-id");
+        const commentElement = modalOverlay.querySelector(
+          `.card-comment[data-comment-id="${commentId}"]`
+        );
+        deleteComment(taskId, commentId, commentElement);
+      });
+    });
+
+    const deleteBtn = modalOverlay.querySelector(".delete-card-btn");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", () => {
+        closeModal();
+        deleteCard(taskId);
+      });
+    }
+
+    const handleKeydown = (e) => {
+      if (e.key === "Escape") {
+        closeModal();
+        document.removeEventListener("keydown", handleKeydown);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeydown);
+
+    const completionCheckbox = modalOverlay.querySelector(
+      ".completion-checkbox"
+    );
+    if (completionCheckbox) {
+      completionCheckbox.addEventListener("click", (e) => {
+        e.preventDefault();
+        const taskId = e.target.getAttribute("data-task-id");
+        toggleTaskCompletion(taskId);
+
+        const boardData = JSON.parse(currentBoardData.boardData);
+        for (const column of boardData.columns) {
+          const task = column.tasks.find((t) => t.id === taskId);
+          if (task) {
+            completionCheckbox.checked = task.completed;
+            break;
+          }
+        }
+      });
+    }
+
+    const modalCheckbox = modalOverlay.querySelector(
+      ".task-completion-toggle .card-checkbox"
+    );
+    if (modalCheckbox) {
+      modalCheckbox.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const taskId = e.target.getAttribute("data-task-id");
+        toggleTaskCompletion(taskId);
+      });
+
+      const toggleContainer = modalOverlay.querySelector(
+        ".task-completion-toggle"
+      );
+      if (toggleContainer) {
+        toggleContainer.addEventListener("click", (e) => {
+          if (!e.target.classList.contains("card-checkbox")) {
+            const taskId = modalCheckbox.getAttribute("data-task-id");
+            toggleTaskCompletion(taskId);
+          }
+        });
+      }
+    }
+
+    const addChecklistButton = modalOverlay.querySelector(".add-checklist-btn");
+    if (addChecklistButton) {
+      addChecklistButton.addEventListener("click", () => {
+        addChecklist(taskId);
+      });
+    }
+
+    const checklistElements =
+      modalOverlay.querySelectorAll(".checklist-section");
+    checklistElements.forEach((checklistElement) => {
+      const checklistId = checklistElement.dataset.checklistId;
+      const checklistData = foundTask.checklists.find(
+        (cl) => cl.id === checklistId
+      );
+      if (checklistData) {
+        updateChecklistProgress(checklistElement, checklistData);
+        setupChecklistEventListeners(checklistElement, taskId, checklistId);
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка при открытии карточки:", error);
+    alert("Не удалось открыть карточку: " + error.message);
+  }
+}
+
+function editComment(taskId, commentId, commentElement) {
+  try {
+    const commentTextElement = commentElement.querySelector(".comment-text");
+
+    const boardDataForEditText = JSON.parse(currentBoardData.boardData);
+    let rawText = "";
+    for (const column of boardDataForEditText.columns) {
+      const task = column.tasks.find((t) => t.id === taskId);
+      if (task && task.comments) {
+        const comment = task.comments.find((c) => c.id === commentId);
+        if (comment) {
+          rawText = comment.text;
+          break;
+        }
+      }
+      if (rawText) break;
+    }
+
+    const editForm = document.createElement("div");
+    editForm.className = "comment-edit-form";
+    editForm.innerHTML = `
+      <textarea class="comment-edit-textarea">${rawText}</textarea>
+      <div class="comment-edit-actions">
+        <button class="comment-save-btn">Сохранить</button>
+        <button class="comment-cancel-btn">Отмена</button>
+      </div>
+    `;
+
+    commentTextElement.innerHTML = "";
+    commentTextElement.appendChild(editForm);
+
+    const textarea = editForm.querySelector(".comment-edit-textarea");
+    const saveBtn = editForm.querySelector(".comment-save-btn");
+    const cancelBtn = editForm.querySelector(".comment-cancel-btn");
+
+    textarea.focus();
+
+    saveBtn.addEventListener("click", () => {
+      const newText = textarea.value.trim();
+      if (!newText) return;
+
+      const boardData = JSON.parse(currentBoardData.boardData);
+      for (const column of boardData.columns) {
+        const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
+        if (taskIndex !== -1) {
+          const commentIndex = column.tasks[taskIndex].comments.findIndex(
+            (c) => c.id === commentId
+          );
+          if (commentIndex !== -1) {
+            column.tasks[taskIndex].comments[commentIndex].text = newText;
+            column.tasks[taskIndex].comments[commentIndex].updatedAt =
+              new Date().toISOString();
+
+            commentTextElement.innerHTML = formatTextWithMentions(newText);
+
+            updateBoardData(boardData);
+            break;
+          }
+        }
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      commentTextElement.innerHTML = formatTextWithMentions(rawText);
+    });
+
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        saveBtn.click();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelBtn.click();
+      }
+    });
+  } catch (error) {
+    console.error("Ошибка при редактировании комментария:", error);
+    alert("Не удалось отредактировать комментарий: " + error.message);
+  }
+}
+
+function deleteComment(taskId, commentId, commentElement) {
+  try {
+    const modalOverlay = document.createElement("div");
+    modalOverlay.className = "modal-overlay";
+
+    modalOverlay.innerHTML = `
+      <div class="modal-container delete-card-modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Удаление комментария</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Вы уверены, что хотите удалить этот комментарий?</p>
+          <p class="delete-warning">Это действие нельзя отменить.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-secondary-btn" id="cancelDeleteComment">Отмена</button>
+          <button class="modal-danger-btn" id="confirmDeleteComment">Удалить</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modalOverlay);
+
+    setTimeout(() => {
+      modalOverlay.classList.add("active");
+    }, 10);
+
+    const closeModal = () => {
+      modalOverlay.classList.remove("active");
+      setTimeout(() => {
+        document.body.removeChild(modalOverlay);
+      }, 300);
+    };
+
+    modalOverlay
+      .querySelector(".modal-close")
+      .addEventListener("click", closeModal);
+
+    document
+      .getElementById("cancelDeleteComment")
+      .addEventListener("click", closeModal);
+
+    document
+      .getElementById("confirmDeleteComment")
+      .addEventListener("click", () => {
+        const boardData = JSON.parse(currentBoardData.boardData);
+        for (const column of boardData.columns) {
+          const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
+          if (taskIndex !== -1) {
+            const commentIndex = column.tasks[taskIndex].comments.findIndex(
+              (c) => c.id === commentId
+            );
+            if (commentIndex !== -1) {
+              column.tasks[taskIndex].comments.splice(commentIndex, 1);
+
+              commentElement.remove();
+
+              const commentsContainer = document.querySelector(
+                ".card-comments-container"
+              );
+              if (
+                commentsContainer &&
+                column.tasks[taskIndex].comments.length === 0
+              ) {
+                commentsContainer.innerHTML =
+                  '<div class="no-comments">Нет комментариев</div>';
+              }
+
+              updateBoardData(boardData);
+
+              updateCardIndicators(taskId);
+              break;
+            }
+          }
+        }
+
+        closeModal();
+      });
+
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) {
+        closeModal();
+      }
+    });
+
+    const handleKeydown = (e) => {
+      if (e.key === "Escape") {
+        closeModal();
+        document.removeEventListener("keydown", handleKeydown);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeydown);
+  } catch (error) {
+    console.error("Ошибка при удалении комментария:", error);
+    alert("Не удалось удалить комментарий: " + error.message);
+  }
+}
+
+function updateCardIndicators(taskId) {
+  try {
+    const cardElement = document.querySelector(
+      `.kanban-card[data-task-id="${taskId}"]`
+    );
+    if (!cardElement) return;
+
+    const boardData = JSON.parse(currentBoardData.boardData);
+
+    let foundTask = null;
+
+    for (const column of boardData.columns) {
+      const task = column.tasks.find((t) => t.id === taskId);
+      if (task) {
+        foundTask = task;
+        break;
+      }
+    }
+
+    if (!foundTask) return;
+
+    const commentsCount = foundTask.comments ? foundTask.comments.length : 0;
+    const hasDescription =
+      foundTask.description && foundTask.description.trim() !== "";
+
+    const { totalChecklistItems, completedChecklistItems } =
+      getChecklistStats(foundTask);
+
+    const indicatorsContainer = cardElement.querySelector(".card-indicators");
+    if (indicatorsContainer) {
+      indicatorsContainer.innerHTML = `
+        ${
+          hasDescription
+            ? `<div class="card-indicator description-indicator" title="Карточка содержит описание">
+            <i class="fas fa-align-left"></i>
+          </div>`
+            : ""
+        }
+        ${
+          commentsCount > 0
+            ? `<div class="card-indicator comments-indicator" title="Комментарии: ${commentsCount}">
+            <i class="fas fa-comment"></i>
+            <span class="indicator-count">${commentsCount}</span>
+          </div>`
+            : ""
+        }
+        ${
+          totalChecklistItems > 0
+            ? `<div class="card-indicator checklist-indicator" title="Чек-лист: ${completedChecklistItems}/${totalChecklistItems}">
+            <i class="fas fa-list-check"></i>
+            <span class="indicator-count">${completedChecklistItems}/${totalChecklistItems}</span>
+          </div>`
+            : ""
+        }
+      `;
+    }
+  } catch (error) {}
+}
+
+function toggleTaskCompletion(taskId) {
+  try {
+    const boardData = JSON.parse(currentBoardData.boardData);
+
+    let foundTask = null;
+    let columnIndex = -1;
+    let taskIndex = -1;
+
+    for (let i = 0; i < boardData.columns.length; i++) {
+      const column = boardData.columns[i];
+      const tIndex = column.tasks.findIndex((task) => task.id === taskId);
+
+      if (tIndex !== -1) {
+        columnIndex = i;
+        taskIndex = tIndex;
+        foundTask = column.tasks[tIndex];
+        break;
+      }
+    }
+
+    if (!foundTask) {
+      console.error("Задача не найдена");
+      return;
+    }
+
+    foundTask.completed = !foundTask.completed;
+    foundTask.updatedAt = new Date().toISOString();
+
+    const cardElement = document.querySelector(
+      `.kanban-card[data-task-id="${taskId}"]`
+    );
+    if (cardElement) {
+      const checkbox = cardElement.querySelector(".card-checkbox");
+
+      if (foundTask.completed) {
+        cardElement.classList.add("completed");
+        if (checkbox) checkbox.classList.add("checked");
+      } else {
+        cardElement.classList.remove("completed");
+        if (checkbox) checkbox.classList.remove("checked");
+      }
+    }
+
+    const modalCheckbox = document.querySelector(
+      `.task-completion-toggle .card-checkbox[data-task-id="${taskId}"]`
+    );
+    if (modalCheckbox) {
+      if (foundTask.completed) {
+        modalCheckbox.classList.add("checked");
+      } else {
+        modalCheckbox.classList.remove("checked");
+      }
+    }
+
+    boardData.columns[columnIndex].tasks[taskIndex] = foundTask;
+    updateBoardData(boardData);
+
+    console.log(
+      `Задача ${taskId} отмечена как ${
+        foundTask.completed ? "выполненная" : "невыполненная"
+      }`
+    );
+  } catch (error) {
+    console.error("Ошибка при изменении статуса задачи:", error);
+  }
+}
+
+function renderChecklistHTML(checklist, taskId) {
+  const completedItems = checklist.items.filter(
+    (item) => item.completed
+  ).length;
+  const totalItems = checklist.items.length;
+  const progress =
+    totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  return `
+    <div class="checklist-section" data-checklist-id="${
+      checklist.id
+    }" data-task-id="${taskId}">
+      <div class="checklist-header">
+        <h4 class="checklist-title-text checklist-title-editable" data-checklist-id="${
+          checklist.id
+        }">${checklist.title}</h4>
+        <button class="checklist-delete-btn" title="Удалить чек-лист">&times;</button>
+      </div>
+      <div class="checklist-progress-info">
+        <span class="checklist-progress-percentage">${progress}%</span>
+        <div class="checklist-progress">
+          <div class="checklist-progress-bar" style="width: ${progress}%;"></div>
+        </div>
+      </div>
+      <div class="checklist-items">
+        ${checklist.items
+          .map((item) => {
+            let assignedUsersHtml = "";
+            if (item.assignedUsers && item.assignedUsers.length > 0) {
+              assignedUsersHtml = item.assignedUsers
+                .map(
+                  (user) => `
+              <span class="checklist-item-assignee-tag" data-user-id="${user.id}">
+                @${user.name}
+                <button class="delete-assignee-btn" title="Удалить пользователя">&times;</button>
+              </span>
+            `
+                )
+                .join("");
+            }
+
+            let dueDateHtml = "";
+            if (item.dueDate) {
+              const date = new Date(item.dueDate);
+
+              if (!isNaN(date.getTime())) {
+                const utcDate = new Date(
+                  Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+                );
+                dueDateHtml = `<span class="checklist-item-duedate" title="Срок: ${utcDate.toLocaleDateString(
+                  "ru-RU"
+                )}">📅 ${utcDate.toLocaleDateString("ru-RU")}</span>`;
+              }
+            }
+
+            return `
+          <div class="checklist-item ${
+            item.completed ? "completed" : ""
+          }" data-item-id="${item.id}">
+            <div class="checklist-item-checkbox ${
+              item.completed ? "checked" : ""
+            }"></div>
+            <div class="checklist-item-details">
+              <span class="checklist-item-text checklist-item-editable" data-item-id="${
+                item.id
+              }">${item.text}</span>
+              <div class="checklist-item-meta">
+                <div class="assigned-users-container">
+                  ${assignedUsersHtml}
+                </div>
+                ${dueDateHtml}
+              </div>
+            </div>
+            <div class="checklist-item-actions">
+              <button class="checklist-item-assign-user-btn" title="Назначить пользователя" data-item-id="${
+                item.id
+              }">👤</button>
+              <button class="checklist-item-set-due-date-btn" title="Установить срок" data-item-id="${
+                item.id
+              }">📅</button>
+              <button class="checklist-item-delete-btn" title="Удалить элемент">&times;</button>
+            </div>
+          </div>
+        `;
+          })
+          .join("")}
+      </div>
+      <div class="checklist-add-item-form">
+        <input type="text" class="checklist-add-input" placeholder="Добавить элемент">
+        <div class="checklist-add-item-actions">
+            <button class="checklist-add-btn">Добавить</button>
+            <button class="checklist-cancel-add-btn">Отмена</button>
+        </div>
+      </div>
+      <button class="checklist-show-add-form-btn">+ Добавить элемент</button>
+    </div>
+  `;
+}
+
+function addChecklist(taskId) {
+  const boardData = JSON.parse(currentBoardData.boardData);
+  const task = findTaskById(boardData, taskId);
+
+  if (task) {
+    const newChecklist = {
+      id: "checklist_" + Date.now(),
+      title: "Чек-лист",
+      items: [],
+    };
+    if (!task.checklists) {
+      task.checklists = [];
+    }
+    const isFirstChecklist = task.checklists.length === 0;
+    task.checklists.push(newChecklist);
+    updateBoardData(boardData);
+    updateCardIndicators(taskId);
+
+    const checklistsContainer = document.querySelector(
+      `.card-checklists-container[data-task-id="${taskId}"]`
+    );
+    if (checklistsContainer) {
+      if (
+        isFirstChecklist &&
+        !checklistsContainer.previousElementSibling?.classList.contains(
+          "card-detail-label"
+        )
+      ) {
+        const parentSection = checklistsContainer.closest(
+          ".card-detail-section"
+        );
+        if (
+          parentSection &&
+          !parentSection.querySelector(".card-detail-label")
+        ) {
+          const labelDiv = document.createElement("div");
+          labelDiv.className = "card-detail-label";
+          labelDiv.textContent = "Чек-листы";
+
+          if (
+            checklistsContainer.parentElement.classList.contains(
+              "card-modal-main-content"
+            )
+          ) {
+            const newSection = document.createElement("div");
+            newSection.className = "card-detail-section";
+            newSection.appendChild(labelDiv);
+            newSection.appendChild(checklistsContainer);
+
+            const descriptionSection = document
+              .querySelector(".card-description-editable")
+              ?.closest(".card-detail-section");
+            if (descriptionSection && descriptionSection.nextElementSibling) {
+              descriptionSection.parentElement.insertBefore(
+                newSection,
+                descriptionSection.nextElementSibling
+              );
+            } else if (descriptionSection) {
+              descriptionSection.parentElement.appendChild(newSection);
+            } else {
+              document
+                .querySelector(".card-modal-main-content")
+                .appendChild(newSection);
+            }
+          } else if (
+            !checklistsContainer.parentElement.querySelector(
+              ".card-detail-label"
+            )
+          ) {
+            checklistsContainer.parentElement.insertBefore(
+              labelDiv,
+              checklistsContainer
+            );
+          }
+        } else if (
+          parentSection &&
+          parentSection.querySelector(".card-detail-label")
+        ) {
+          parentSection.style.display = "";
+          parentSection.querySelector(".card-detail-label").style.display = "";
+        }
+      }
+
+      const newChecklistHTML = renderChecklistHTML(newChecklist, taskId);
+      checklistsContainer.insertAdjacentHTML("beforeend", newChecklistHTML);
+      const newChecklistElement = checklistsContainer.querySelector(
+        `.checklist-section[data-checklist-id="${newChecklist.id}"]`
+      );
+      if (newChecklistElement) {
+        updateChecklistProgress(newChecklistElement, newChecklist);
+        setupChecklistEventListeners(
+          newChecklistElement,
+          taskId,
+          newChecklist.id
+        );
+
+        const showAddFormBtn = newChecklistElement.querySelector(
+          ".checklist-show-add-form-btn"
+        );
+        if (showAddFormBtn) showAddFormBtn.click();
+      }
+    }
+  }
+}
+
+function deleteChecklist(taskId, checklistId) {
+  const boardData = JSON.parse(currentBoardData.boardData);
+  const task = findTaskById(boardData, taskId);
+
+  if (task && task.checklists) {
+    task.checklists = task.checklists.filter((cl) => cl.id !== checklistId);
+    updateBoardData(boardData);
+    updateCardIndicators(taskId);
+
+    const checklistElement = document.querySelector(
+      `.checklist-section[data-checklist-id="${checklistId}"]`
+    );
+    if (checklistElement) {
+      const checklistsContainer = checklistElement.parentElement;
+      checklistElement.remove();
+
+      if (checklistsContainer && checklistsContainer.children.length === 0) {
+        const parentSection = checklistsContainer.closest(
+          ".card-detail-section"
+        );
+        if (parentSection) {
+          parentSection.style.display = "none";
+        }
+      }
+    }
+  }
+}
+
+function addChecklistItem(taskId, checklistId, itemText) {
+  const boardData = JSON.parse(currentBoardData.boardData);
+  const task = findTaskById(boardData, taskId);
+  const checklist = task
+    ? task.checklists.find((cl) => cl.id === checklistId)
+    : null;
+
+  if (checklist && itemText.trim() !== "") {
+    const newItem = {
+      id: "item_" + Date.now(),
+      text: itemText.trim(),
+      completed: false,
+      assignedUsers: [],
+      dueDate: null,
+    };
+    checklist.items.push(newItem);
+    updateBoardData(boardData);
+    updateCardIndicators(taskId);
+    updateUserCardHighlight(taskId);
+
+    const checklistElement = document.querySelector(
+      `.checklist-section[data-checklist-id="${checklistId}"]`
+    );
+    if (checklistElement) {
+      const itemsContainer = checklistElement.querySelector(".checklist-items");
+      const newItemHTML = `
+        <div class="checklist-item" data-item-id="${newItem.id}">
+          <div class="checklist-item-checkbox"></div>
+          <div class="checklist-item-details">
+            <span class="checklist-item-text checklist-item-editable" data-item-id="${newItem.id}">${newItem.text}</span>
+            <div class="checklist-item-meta">
+              <div class="assigned-users-container"></div> <!-- <<< ИЗМЕНЕНИЕ ЗДЕСЬ -->
+              <!-- dueDate будет добавлен динамически при установке -->
+            </div>
+          </div>
+          <div class="checklist-item-actions">
+            <button class="checklist-item-assign-user-btn" title="Назначить пользователя" data-item-id="${newItem.id}">👤</button>
+            <button class="checklist-item-set-due-date-btn" title="Установить срок" data-item-id="${newItem.id}">📅</button>
+            <button class="checklist-item-delete-btn" title="Удалить элемент">&times;</button>
+          </div>
+        </div>
+      `;
+      itemsContainer.insertAdjacentHTML("beforeend", newItemHTML);
+
+      const newItemElement = itemsContainer.querySelector(
+        `.checklist-item[data-item-id="${newItem.id}"]`
+      );
+      if (newItemElement) {
+        newItemElement
+          .querySelector(".checklist-item-checkbox")
+          .addEventListener("click", () => {
+            toggleChecklistItemCompletion(taskId, checklistId, newItem.id);
+          });
+
+        const textElement = newItemElement.querySelector(
+          ".checklist-item-text.checklist-item-editable"
+        );
+        if (textElement) {
+          textElement.addEventListener(
+            "click",
+            function handleItemTextClick(e) {
+              if (this.querySelector("input.checklist-item-edit-input")) {
+                return;
+              }
+              const currentText = this.textContent;
+              const input = document.createElement("input");
+              input.type = "text";
+              input.value = currentText;
+              input.className = "checklist-item-edit-input";
+
+              this.innerHTML = "";
+              this.appendChild(input);
+              input.focus();
+              input.select();
+
+              const saveItemText = () => {
+                const newText = input.value.trim();
+                if (newText && newText !== currentText) {
+                  const boardDataLocal = JSON.parse(currentBoardData.boardData);
+                  const taskLocal = findTaskById(boardDataLocal, taskId);
+                  const checklistLocal = taskLocal
+                    ? taskLocal.checklists.find((cl) => cl.id === checklistId)
+                    : null;
+
+                  const itemLocal = checklistLocal
+                    ? checklistLocal.items.find((i) => i.id === newItem.id)
+                    : null;
+                  if (itemLocal) {
+                    itemLocal.text = newText;
+                    updateBoardData(boardDataLocal);
+                    this.textContent = newText;
+                  } else {
+                    this.textContent = currentText;
+                  }
+                } else {
+                  this.textContent = currentText;
+                }
+                input.removeEventListener("blur", saveItemText);
+                input.removeEventListener("keydown", handleInputKeydown);
+              };
+
+              const handleInputKeydown = (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  saveItemText();
+                } else if (event.key === "Escape") {
+                  this.textContent = currentText;
+                  input.removeEventListener("blur", saveItemText);
+                  input.removeEventListener("keydown", handleInputKeydown);
+                }
+              };
+
+              input.addEventListener("blur", saveItemText);
+              input.addEventListener("keydown", handleInputKeydown);
+              e.stopPropagation();
+            }
+          );
+        }
+
+        newItemElement
+          .querySelector(".checklist-item-delete-btn")
+          .addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteChecklistItem(taskId, checklistId, newItem.id);
+          });
+
+        const newElementItemId = newItemElement.dataset.itemId;
+        console.log(
+          `[addChecklistItem] Calling setupChecklistItemActionButtons for new item. DOM ID: ${newElementItemId}, Original newItem.id: ${newItem.id}`
+        );
+        if (newElementItemId !== newItem.id) {
+          console.warn(
+            `[addChecklistItem] Mismatch! newItem.id (${newItem.id}) vs newItemElement.dataset.itemId (${newElementItemId})`
+          );
+        }
+        setupChecklistItemActionButtons(
+          newItemElement,
+          taskId,
+          checklistId,
+          newElementItemId
+        );
+      }
+      updateChecklistProgress(checklistElement, checklist);
+    }
+  }
+}
+
+function deleteChecklistItem(taskId, checklistId, itemId) {
+  const boardData = JSON.parse(currentBoardData.boardData);
+  const task = findTaskById(boardData, taskId);
+  const checklist = task
+    ? task.checklists.find((cl) => cl.id === checklistId)
+    : null;
+
+  if (checklist) {
+    checklist.items = checklist.items.filter((item) => item.id !== itemId);
+    updateBoardData(boardData);
+    updateCardIndicators(taskId);
+    updateUserCardHighlight(taskId);
+
+    const itemElement = document.querySelector(
+      `.checklist-item[data-item-id="${itemId}"]`
+    );
+    if (itemElement) {
+      itemElement.remove();
+    }
+    const checklistElement = document.querySelector(
+      `.checklist-section[data-checklist-id="${checklistId}"]`
+    );
+    if (checklistElement) {
+      updateChecklistProgress(checklistElement, checklist);
+    }
+  }
+}
+
+function toggleChecklistItemCompletion(taskId, checklistId, itemId) {
+  const boardData = JSON.parse(currentBoardData.boardData);
+  const task = findTaskById(boardData, taskId);
+  const checklist = task
+    ? task.checklists.find((cl) => cl.id === checklistId)
+    : null;
+  const item = checklist ? checklist.items.find((i) => i.id === itemId) : null;
+
+  if (item) {
+    item.completed = !item.completed;
+    updateBoardData(boardData);
+    updateCardIndicators(taskId);
+    updateUserCardHighlight(taskId);
+
+    const itemElement = document.querySelector(
+      `.checklist-item[data-item-id="${itemId}"]`
+    );
+    if (itemElement) {
+      itemElement.classList.toggle("completed", item.completed);
+      itemElement
+        .querySelector(".checklist-item-checkbox")
+        .classList.toggle("checked", item.completed);
+    }
+    const checklistElement = document.querySelector(
+      `.checklist-section[data-checklist-id="${checklistId}"]`
+    );
+    if (checklistElement) {
+      updateChecklistProgress(checklistElement, checklist);
+    }
+  }
+}
+
+function updateChecklistProgress(checklistElement, checklistData) {
+  const completedItems = checklistData.items.filter(
+    (item) => item.completed
+  ).length;
+  const totalItems = checklistData.items.length;
+  const progress =
+    totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  const progressBar = checklistElement.querySelector(".checklist-progress-bar");
+  const progressPercentage = checklistElement.querySelector(
+    ".checklist-progress-percentage"
+  );
+
+  if (progressBar) progressBar.style.width = `${progress}%`;
+  if (progressPercentage) progressPercentage.textContent = `${progress}%`;
+}
+
+function findTaskById(boardData, taskId) {
+  for (const column of boardData.columns) {
+    const task = column.tasks.find((t) => t.id === taskId);
+    if (task) return task;
+  }
+  return null;
+}
+
+function setupChecklistEventListeners(checklistElement, taskId, checklistId) {
+  const oldDeleteBtn = checklistElement.querySelector(".checklist-delete-btn");
+  if (oldDeleteBtn) {
+    const newDeleteBtn = oldDeleteBtn.cloneNode(true);
+    oldDeleteBtn.parentNode.replaceChild(newDeleteBtn, oldDeleteBtn);
+    newDeleteBtn.addEventListener("click", () => {
+      if (confirm("Удалить этот чек-лист?")) {
+        deleteChecklist(taskId, checklistId);
+      }
+    });
+  }
+
+  const showAddFormBtn = checklistElement.querySelector(
+    ".checklist-show-add-form-btn"
+  );
+  const addItemForm = checklistElement.querySelector(
+    ".checklist-add-item-form"
+  );
+
+  const originalAddInput = checklistElement.querySelector(
+    ".checklist-add-input"
+  );
+  const originalAddBtn = checklistElement.querySelector(".checklist-add-btn");
+  const originalCancelBtn = checklistElement.querySelector(
+    ".checklist-cancel-add-btn"
+  );
+
+  if (showAddFormBtn) {
+    const newShowAddFormBtn = showAddFormBtn.cloneNode(true);
+    showAddFormBtn.parentNode.replaceChild(newShowAddFormBtn, showAddFormBtn);
+    newShowAddFormBtn.addEventListener("click", () => {
+      addItemForm.style.display = "flex";
+      newShowAddFormBtn.style.display = "none";
+
+      const currentAddInput = checklistElement.querySelector(
+        ".checklist-add-input"
+      );
+      if (currentAddInput) currentAddInput.focus();
+    });
+  }
+
+  if (originalCancelBtn) {
+    const newCancelBtn = originalCancelBtn.cloneNode(true);
+    originalCancelBtn.parentNode.replaceChild(newCancelBtn, originalCancelBtn);
+    newCancelBtn.addEventListener("click", () => {
+      addItemForm.style.display = "none";
+      const currentShowAddFormBtn = checklistElement.querySelector(
+        ".checklist-show-add-form-btn"
+      );
+      if (currentShowAddFormBtn) currentShowAddFormBtn.style.display = "block";
+
+      const currentAddInput = checklistElement.querySelector(
+        ".checklist-add-input"
+      );
+      if (currentAddInput) currentAddInput.value = "";
+    });
+  }
+
+  if (originalAddInput) {
+    const newAddInput = originalAddInput.cloneNode(true);
+    originalAddInput.parentNode.replaceChild(newAddInput, originalAddInput);
+    newAddInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+
+        const currentAddBtn =
+          checklistElement.querySelector(".checklist-add-btn");
+        if (currentAddBtn) currentAddBtn.click();
+      }
+    });
+  }
+
+  if (originalAddBtn) {
+    const newAddBtn = originalAddBtn.cloneNode(true);
+    originalAddBtn.parentNode.replaceChild(newAddBtn, originalAddBtn);
+    newAddBtn.addEventListener("click", () => {
+      const currentAddInput = checklistElement.querySelector(
+        ".checklist-add-input"
+      );
+      if (currentAddInput) {
+        const text = currentAddInput.value.trim();
+        if (text) {
+          addChecklistItem(taskId, checklistId, text);
+          currentAddInput.value = "";
+          currentAddInput.focus();
+        }
+      }
+    });
+  }
+
+  checklistElement
+    .querySelectorAll(".checklist-item")
+    .forEach((itemElement) => {
+      const itemId = itemElement.dataset.itemId;
+
+      const checkbox = itemElement.querySelector(".checklist-item-checkbox");
+      const textElement = itemElement.querySelector(
+        ".checklist-item-text.checklist-item-editable"
+      );
+      const deleteItemBtn = itemElement.querySelector(
+        ".checklist-item-delete-btn"
+      );
+
+      if (checkbox) {
+        const newCheckbox = checkbox.cloneNode(true);
+        checkbox.parentNode.replaceChild(newCheckbox, checkbox);
+        newCheckbox.addEventListener("click", () => {
+          toggleChecklistItemCompletion(taskId, checklistId, itemId);
+        });
+      }
+      if (deleteItemBtn) {
+        const newDeleteItemBtn = deleteItemBtn.cloneNode(true);
+        deleteItemBtn.parentNode.replaceChild(newDeleteItemBtn, deleteItemBtn);
+        newDeleteItemBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteChecklistItem(taskId, checklistId, itemId);
+        });
+      }
+
+      setupChecklistItemActionButtons(itemElement, taskId, checklistId, itemId);
+    });
+
+  const checklistTitleElement = checklistElement.querySelector(
+    ".checklist-title-editable"
+  );
+  if (checklistTitleElement) {
+    const newChecklistTitleElement = checklistTitleElement.cloneNode(true);
+    checklistTitleElement.parentNode.replaceChild(
+      newChecklistTitleElement,
+      checklistTitleElement
+    );
+
+    newChecklistTitleElement.addEventListener(
+      "click",
+      function handleTitleClick(e) {
+        if (this.querySelector(".checklist-title-input-inline")) {
+          return;
+        }
+
+        const currentTitle = this.textContent;
+        const input = document.createElement("input");
+        input.value = currentTitle;
+        input.className = "checklist-title-input-inline";
+        this.innerHTML = "";
+        this.appendChild(input);
+        input.focus();
+
+        const valueLength = input.value.length;
+        input.setSelectionRange(valueLength, valueLength);
+
+        const saveChecklistTitle = () => {
+          const newTitle = input.value.trim();
+          if (newTitle && newTitle !== currentTitle) {
+            const boardData = JSON.parse(currentBoardData.boardData);
+            const task = findTaskById(boardData, taskId);
+            const checklist = task
+              ? task.checklists.find((cl) => cl.id === checklistId)
+              : null;
+            if (checklist) {
+              checklist.title = newTitle;
+              updateBoardData(boardData);
+              newChecklistTitleElement.textContent = newTitle;
+            } else {
+              newChecklistTitleElement.textContent = currentTitle;
+            }
+          } else {
+            newChecklistTitleElement.textContent = currentTitle;
+          }
+
+          input.removeEventListener("blur", saveChecklistTitle);
+          input.removeEventListener("keydown", handleInputKeydown);
+        };
+
+        const handleInputKeydown = (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            saveChecklistTitle();
+          } else if (event.key === "Escape") {
+            newChecklistTitleElement.textContent = currentTitle;
+            input.removeEventListener("blur", saveChecklistTitle);
+            input.removeEventListener("keydown", handleInputKeydown);
+          }
+        };
+
+        input.addEventListener("blur", saveChecklistTitle);
+        input.addEventListener("keydown", handleInputKeydown);
+
+        e.stopPropagation();
+      }
+    );
+  }
+}
+
+function setupChecklistItemActionButtons(
+  itemElement,
+  taskId,
+  checklistId,
+  itemId
+) {
+  console.log(
+    `[setupChecklistItemActionButtons] Called for itemElement (ID from dataset: ${itemElement.dataset.itemId}), passed itemId: ${itemId}`
+  );
+  const assignUserBtn = itemElement.querySelector(
+    ".checklist-item-assign-user-btn"
+  );
+  const setDueDateBtn = itemElement.querySelector(
+    ".checklist-item-set-due-date-btn"
+  );
+
+  if (assignUserBtn) {
+    const newAssignUserBtn = assignUserBtn.cloneNode(true);
+    assignUserBtn.parentNode.replaceChild(newAssignUserBtn, assignUserBtn);
+    newAssignUserBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      closeAllChecklistItemPopups();
+
+      const users = await getMentionableUsers("");
+
+      const dropdown = document.createElement("div");
+      dropdown.className = "checklist-user-dropdown";
+
+      if (!users || users.length === 0) {
+        const noUsersDiv = document.createElement("div");
+        noUsersDiv.className = "checklist-user-item-empty";
+        noUsersDiv.textContent = "Пользователи не найдены";
+        dropdown.appendChild(noUsersDiv);
+      } else {
+        users.forEach((user) => {
+          const userDiv = document.createElement("div");
+          userDiv.className = "checklist-user-item";
+          userDiv.textContent = user.fullName || user.username;
+          userDiv.dataset.userId = user.id;
+          userDiv.dataset.userName = user.fullName || user.username;
+          userDiv.addEventListener("click", () => {
+            const currentItemId = itemId;
+            console.log(
+              `[UserDiv Click] START. User to add: ${user.id} (${
+                user.fullName || user.username
+              }), Target ItemId: ${currentItemId}, DOM Element data-item-id: ${
+                itemElement.dataset.itemId
+              }`
+            );
+
+            if (itemElement.dataset.itemId !== currentItemId) {
+              console.error(
+                `[UserDiv Click] MISMATCH: DOM element data-id (${itemElement.dataset.itemId}) !== currentItemId from closure (${currentItemId}). This is a problem!`
+              );
+            }
+
+            const boardData = JSON.parse(currentBoardData.boardData);
+            const task = findTaskById(boardData, taskId);
+            const checklist = task?.checklists.find(
+              (cl) => cl.id === checklistId
+            );
+
+            if (!checklist) {
+              console.error(
+                "[UserDiv Click] Checklist not found in data for ID:",
+                checklistId
+              );
+              closeAllChecklistItemPopups();
+              return;
+            }
+
+            const itemToUpdate = checklist.items.find(
+              (i) => i.id === currentItemId
+            );
+
+            if (itemToUpdate) {
+              console.log(
+                `[UserDiv Click] Item ${currentItemId} FOUND in data. Current assignedUsers:`,
+                JSON.stringify(itemToUpdate.assignedUsers)
+              );
+              if (!itemToUpdate.assignedUsers) {
+                itemToUpdate.assignedUsers = [];
+              }
+              if (!itemToUpdate.assignedUsers.find((u) => u.id === user.id)) {
+                itemToUpdate.assignedUsers.push({
+                  id: user.id,
+                  name: user.fullName || user.username,
+                });
+                console.log(
+                  `[UserDiv Click] User ${user.id} pushed. Item's assignedUsers NOW:`,
+                  JSON.stringify(itemToUpdate.assignedUsers)
+                );
+
+                updateBoardData(boardData);
+                updateUserCardHighlight(taskId);
+
+                const freshItemElement = document.querySelector(
+                  `.checklist-item[data-item-id="${currentItemId}"]`
+                );
+
+                if (freshItemElement) {
+                  console.log(
+                    `[UserDiv Click] Calling renderAssignedUsersForChecklistItem for FRESH DOM item with data-id ${freshItemElement.dataset.itemId} (target item id: ${itemToUpdate.id})`
+                  );
+                  if (!document.body.contains(freshItemElement)) {
+                    console.error(
+                      "[UserDiv Click] freshItemElement is DETACHED from DOM before rendering assigned users!",
+                      freshItemElement
+                    );
+                  }
+                  renderAssignedUsersForChecklistItem(
+                    freshItemElement,
+                    itemToUpdate.assignedUsers,
+                    taskId,
+                    checklistId,
+                    itemToUpdate.id
+                  );
+                  console.log(
+                    `[UserDiv Click] FINISHED renderAssignedUsersForChecklistItem for item ${itemToUpdate.id}`
+                  );
+                } else {
+                  console.error(
+                    `[UserDiv Click] CRITICAL: freshItemElement with data-item-id '${currentItemId}' NOT FOUND in DOM before rendering assigned users.`
+                  );
+                }
+              } else {
+                console.log(
+                  `[UserDiv Click] User ${user.id} already assigned to item ${currentItemId}.`
+                );
+              }
+            } else {
+              console.error(
+                `[UserDiv Click] CRITICAL: Item with ID '${currentItemId}' NOT FOUND in data. TaskId: ${taskId}, ChecklistId: ${checklistId}. Checklist items in data:`,
+                checklist.items.map((it) => it.id)
+              );
+            }
+            closeAllChecklistItemPopups();
+          });
+          dropdown.appendChild(userDiv);
+        });
+      }
+
+      itemElement
+        .querySelector(".checklist-item-actions")
+        .appendChild(dropdown);
+      activeChecklistItemUserDropdown = dropdown;
+    });
+  }
+
+  const boardDataForInitialRender = JSON.parse(currentBoardData.boardData);
+  const taskForInitialRender = findTaskById(boardDataForInitialRender, taskId);
+  const checklistForInitialRender = taskForInitialRender?.checklists.find(
+    (cl) => cl.id === checklistId
+  );
+  const itemForInitialRender = checklistForInitialRender?.items.find(
+    (i) => i.id === itemId
+  );
+  if (itemForInitialRender && itemForInitialRender.assignedUsers) {
+    renderAssignedUsersForChecklistItem(
+      itemElement,
+      itemForInitialRender.assignedUsers,
+      taskId,
+      checklistId,
+      itemId
+    );
+  }
+
+  if (setDueDateBtn) {
+    const newSetDueDateBtn = setDueDateBtn.cloneNode(true);
+    setDueDateBtn.parentNode.replaceChild(newSetDueDateBtn, setDueDateBtn);
+
+    newSetDueDateBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeAllChecklistItemPopups();
+
+      const currentDueDateValue =
+        itemElement
+          .querySelector(".checklist-item-duedate")
+          ?.textContent.split(" ")[1] || "";
+
+      let dateForInput = "";
+      if (currentDueDateValue) {
+        const parts = currentDueDateValue.split(".");
+        if (parts.length === 3) {
+          dateForInput = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+      }
+
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.className = "checklist-item-date-input";
+      dateInput.value = dateForInput;
+
+      newSetDueDateBtn.style.display = "none";
+
+      newSetDueDateBtn.parentNode.insertBefore(
+        dateInput,
+        newSetDueDateBtn.nextSibling
+      );
+      dateInput.focus();
+
+      activeChecklistItemDateInput = {
+        input: dateInput,
+        setDueDateBtn: newSetDueDateBtn,
+        taskId,
+        checklistId,
+        itemId,
+      };
+
+      const saveDueDate = () => {
+        if (
+          activeChecklistItemDateInput &&
+          activeChecklistItemDateInput.input === dateInput
+        ) {
+          const newDueDate = dateInput.value;
+
+          const boardData = JSON.parse(currentBoardData.boardData);
+          const task = findTaskById(boardData, taskId);
+          const checklist = task?.checklists.find(
+            (cl) => cl.id === checklistId
+          );
+          const item = checklist?.items.find((i) => i.id === itemId);
+
+          if (item) {
+            item.dueDate = newDueDate ? newDueDate : null;
+            updateBoardData(boardData);
+
+            const metaContainer = itemElement.querySelector(
+              ".checklist-item-meta"
+            );
+            let dueDateDisplay = metaContainer.querySelector(
+              ".checklist-item-duedate"
+            );
+            if (newDueDate) {
+              if (!dueDateDisplay) {
+                dueDateDisplay = document.createElement("span");
+                dueDateDisplay.className = "checklist-item-duedate";
+                metaContainer.appendChild(dueDateDisplay);
+              }
+              const displayDate = new Date(newDueDate);
+              const utcDisplayDate = new Date(
+                Date.UTC(
+                  displayDate.getFullYear(),
+                  displayDate.getMonth(),
+                  displayDate.getDate()
+                )
+              );
+              dueDateDisplay.textContent = `📅 ${utcDisplayDate.toLocaleDateString(
+                "ru-RU"
+              )}`;
+              dueDateDisplay.title = `Срок: ${utcDisplayDate.toLocaleDateString(
+                "ru-RU"
+              )}`;
+            } else if (dueDateDisplay) {
+              dueDateDisplay.remove();
+            }
+          }
+          closeAllChecklistItemPopups();
+        }
+      };
+
+      dateInput.addEventListener("blur", () => {
+        setTimeout(saveDueDate, 100);
+      });
+
+      dateInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveDueDate();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          closeAllChecklistItemPopups();
+        }
+      });
+    });
+  }
+}
+
+function renderAssignedUsersForChecklistItem(
+  itemElement,
+  assignedUsers,
+  taskId,
+  checklistId,
+  itemId
+) {
+  console.log(
+    `[renderAssignedUsersForChecklistItem] Called for itemId: ${itemId}, DOM item data-id: ${
+      itemElement ? itemElement.dataset.itemId : "NULL itemElement"
+    }. Users to render:`,
+    JSON.stringify(assignedUsers)
+  );
+
+  if (!itemElement) {
+    console.error(
+      `[renderAssignedUsersForChecklistItem] CRITICAL: itemElement is NULL for itemId: ${itemId}. Cannot render.`
+    );
+    return;
+  }
+  if (!document.body.contains(itemElement)) {
+    console.error(
+      `[renderAssignedUsersForChecklistItem] itemElement for itemId ${itemId} is DETACHED from DOM. Cannot render.`,
+      itemElement
+    );
+    return;
+  }
+
+  const assignedUsersContainer = itemElement.querySelector(
+    ".assigned-users-container"
+  );
+  if (!assignedUsersContainer) {
+    console.error(
+      `[renderAssignedUsersForChecklistItem] CRITICAL: .assigned-users-container NOT FOUND within itemElement for itemId: ${itemId}. itemElement innerHTML:`,
+      itemElement.innerHTML
+    );
+    return;
+  }
+
+  assignedUsersContainer.innerHTML = "";
+  console.log(
+    `[renderAssignedUsersForChecklistItem] Cleared innerHTML of assignedUsersContainer for item ${itemId}`
+  );
+
+  if (assignedUsers && assignedUsers.length > 0) {
+    assignedUsers.forEach((user) => {
+      const userTag = document.createElement("span");
+      userTag.className = "checklist-item-assignee-tag";
+      userTag.dataset.userId = user.id;
+      userTag.textContent = `@${user.name}`;
+
+      const deleteAssigneeBtn = document.createElement("button");
+      deleteAssigneeBtn.className = "delete-assignee-btn";
+      deleteAssigneeBtn.title = "Удалить пользователя";
+      deleteAssigneeBtn.innerHTML = "&times;";
+
+      deleteAssigneeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const boardData = JSON.parse(currentBoardData.boardData);
+        const task = findTaskById(boardData, taskId);
+        const checklist = task?.checklists.find((cl) => cl.id === checklistId);
+        const item = checklist?.items.find((i) => i.id === itemId);
+
+        if (item && item.assignedUsers) {
+          item.assignedUsers = item.assignedUsers.filter(
+            (u) => u.id !== user.id
+          );
+          updateBoardData(boardData);
+          renderAssignedUsersForChecklistItem(
+            itemElement,
+            item.assignedUsers,
+            taskId,
+            checklistId,
+            itemId
+          );
+          updateUserCardHighlight(taskId);
+        }
+      });
+
+      userTag.appendChild(deleteAssigneeBtn);
+      assignedUsersContainer.appendChild(userTag);
+    });
+  }
+}
+
+function positionMentionsDropdown(textarea) {
+  if (!mentionsDropdown || !textarea) return;
+  const rect = textarea.getBoundingClientRect();
+
+  if (rect.width === 0 && rect.height === 0) {
+    console.warn(
+      "Mentions: Textarea has no dimensions, cannot position dropdown accurately.",
+      textarea
+    );
+
+    hideMentionsDropdown();
+    return;
+  }
+
+  mentionsDropdown.style.left = `${rect.left + window.scrollX}px`;
+  mentionsDropdown.style.top = `${rect.bottom + window.scrollY}px`;
+  mentionsDropdown.style.width = `${rect.width}px`;
+}
+
+let activeChecklistItemUserDropdown = null;
+
+let activeChecklistItemDateInput = null;
+
+function closeAllChecklistItemPopups() {
+  if (activeChecklistItemUserDropdown) {
+    activeChecklistItemUserDropdown.remove();
+    activeChecklistItemUserDropdown = null;
+  }
+  if (activeChecklistItemDateInput) {
+    const { input, setDueDateBtn } = activeChecklistItemDateInput;
+    input.remove();
+    setDueDateBtn.style.display = "";
+    activeChecklistItemDateInput = null;
+  }
+}
+
+document.addEventListener("click", function (event) {
+  if (
+    activeChecklistItemUserDropdown &&
+    !activeChecklistItemUserDropdown.contains(event.target) &&
+    !event.target.classList.contains("checklist-item-assign-user-btn")
+  ) {
+    closeAllChecklistItemPopups();
+  }
+  if (
+    activeChecklistItemDateInput &&
+    !activeChecklistItemDateInput.input.contains(event.target) &&
+    !event.target.classList.contains("checklist-item-set-due-date-btn")
+  ) {
+    const { input, setDueDateBtn, taskId, checklistId, itemId } =
+      activeChecklistItemDateInput;
+
+    closeAllChecklistItemPopups();
+  }
+
+  if (mentionsDropdown && mentionsDropdown.style.display === "block") {
+    const isClickInsideTextarea =
+      currentMentionTextarea && currentMentionTextarea.contains(event.target);
+    const isClickInsideDropdown = mentionsDropdown.contains(event.target);
+    if (!isClickInsideTextarea && !isClickInsideDropdown) {
+      hideMentionsDropdown();
+    }
+  }
+});

@@ -28,9 +28,9 @@ public class NotificationController {
     private final UserService userService;
 
     @Autowired
-    public NotificationController(NotificationService notificationService, 
-                                 WorkspaceService workspaceService,
-                                 UserService userService) {
+    public NotificationController(NotificationService notificationService,
+            WorkspaceService workspaceService,
+            UserService userService) {
         this.notificationService = notificationService;
         this.workspaceService = workspaceService;
         this.userService = userService;
@@ -69,7 +69,7 @@ public class NotificationController {
         List<NotificationDto> notificationDtos = NotificationDto.fromEntities(notifications);
         return ResponseEntity.ok(notificationDtos);
     }
-    
+
     /**
      * Получить активные приглашения в рабочие пространства
      */
@@ -85,7 +85,7 @@ public class NotificationController {
         List<NotificationDto> invitationDtos = NotificationDto.fromEntities(invitations);
         return ResponseEntity.ok(invitationDtos);
     }
-    
+
     /**
      * Принять приглашение в рабочее пространство
      */
@@ -96,16 +96,17 @@ public class NotificationController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
+
         boolean accepted = workspaceService.acceptInvitation(id, currentUser);
         if (accepted) {
             return ResponseEntity.ok(new ResponseDto("Приглашение принято успешно", true));
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseDto("Невозможно принять приглашение. Проверьте, не истекло ли оно или уже обработано", false));
+                    .body(new ResponseDto(
+                            "Невозможно принять приглашение. Проверьте, не истекло ли оно или уже обработано", false));
         }
     }
-    
+
     /**
      * Отклонить приглашение в рабочее пространство
      */
@@ -116,13 +117,15 @@ public class NotificationController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ResponseDto("Пользователь не авторизован", false));
         }
-        
+
         boolean declined = workspaceService.declineInvitation(id, currentUser);
         if (declined) {
             return ResponseEntity.ok(new ResponseDto("Приглашение отклонено успешно", true));
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseDto("Невозможно отклонить приглашение. Проверьте, не истекло ли оно или уже обработано", false));
+                    .body(new ResponseDto(
+                            "Невозможно отклонить приглашение. Проверьте, не истекло ли оно или уже обработано",
+                            false));
         }
     }
 
@@ -181,7 +184,6 @@ public class NotificationController {
         }
     }
 
-
     /**
      * Получение текущего пользователя из SecurityContext
      */
@@ -192,4 +194,4 @@ public class NotificationController {
         }
         return null;
     }
-} 
+}

@@ -11,6 +11,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @NoArgsConstructor
 @Data
@@ -46,6 +49,12 @@ public class Workspace {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Date updatedAt;
+    
+    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Kanban> kanbans = new ArrayList<>();
+
+    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Chat> chats = new ArrayList<>();
     
     public void addMember(User user, WorkspaceRole role) {
         WorkspaceMember member = new WorkspaceMember();

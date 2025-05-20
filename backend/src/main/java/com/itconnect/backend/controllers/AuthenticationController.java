@@ -39,12 +39,9 @@ public class AuthenticationController {
         this.userService = userService;
     }
 
-    /*
-     * Обработка регистрации
-     */
+   
     @PostMapping("/signup")
     public ResponseEntity<?> register(@RequestBody RegisterUserDto registerUserDto) {
-        System.out.println("registerUserDto: ");
         if (!authenticationService.saveUser(registerUserDto)) {
             return ResponseEntity.badRequest()
                 .body(new ResponseDto("Пользователь с такой почтой уже зарегистрирован", false));
@@ -56,9 +53,7 @@ public class AuthenticationController {
         );
     }
 
-    /*
-     * обработка авторизации
-     */
+   
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> authenticate(@RequestBody LoginUserDto loginUserDto, HttpServletResponse response) {
         User authenticatedUser = authenticationService.authenticate(loginUserDto);
@@ -75,9 +70,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(loginResponse);
     }
 
-    /*
-     * Обработка выхода с аккаунта
-     */
+   
     @GetMapping("/logout")
     public ResponseEntity<String> logout(HttpServletResponse response) {
         Cookie jwtCookie = new Cookie("jwtToken", null);
@@ -88,23 +81,21 @@ public class AuthenticationController {
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create("/")).build();
     }
     
-    /*
-     * Проверка состояния авторизации пользователя
-     */
+   
     @GetMapping("/check")
     public ResponseEntity<?> checkAuthStatus(HttpServletRequest request) {
-        // Получаем текущую аутентификацию
+        
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         
-        // Проверяем, авторизован ли пользователь
+        
         if (authentication != null && authentication.isAuthenticated() && 
             authentication.getPrincipal() instanceof UserDetails) {
             
-            // Получаем данные пользователя
+            
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             User user = (User) userDetails;
             
-            // Создаем объект ответа с данными пользователя
+            
             Map<String, Object> response = new HashMap<>();
             response.put("isAuthenticated", true);
             
@@ -118,7 +109,7 @@ public class AuthenticationController {
             return ResponseEntity.ok(response);
         }
         
-        // Если пользователь не авторизован, возвращаем соответствующий статус
+        
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
             .body(new ResponseDto("Пользователь не авторизован", false));
     }

@@ -11,14 +11,13 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
+import java.util.ArrayList;
 
 @NoArgsConstructor
 @Data
@@ -36,7 +35,6 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String email;
     private String password;
-
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -57,6 +55,9 @@ public class User implements UserDetails {
 
     @OneToMany(mappedBy = "owner")
     private Set<Workspace> ownedWorkspaces = new HashSet<>();
+
+    @OneToMany(mappedBy = "creator", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Chat> createdChats = new ArrayList<>();
 
     @CreationTimestamp
     @Column(updatable = false, name = "created_at")
@@ -121,5 +122,4 @@ public class User implements UserDetails {
     public int hashCode() {
         return userId != null ? userId.hashCode() : 0;
     }
-
 }
