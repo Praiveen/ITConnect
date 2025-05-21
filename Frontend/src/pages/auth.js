@@ -82,7 +82,7 @@ export function renderLoginPage() {
 
         sessionStorage.removeItem("redirectAfterAuth");
 
-        window.location.href = redirectUrl;
+        navigateTo(redirectUrl);
       } catch (error) {
         console.error("Ошибка при входе:", error);
 
