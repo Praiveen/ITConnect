@@ -2,6 +2,7 @@ import { kanbanService } from "../services/kanban-service.js";
 import { getBoardsCache, updateBoardsCache } from "./DashboardSidebar.js";
 import { authService } from "../services/auth-service.js";
 import { workspaceService } from "../services/workspace-service.js";
+import { showWarningToast } from "./Alert.js";
 
 let saveTimer = null;
 const SAVE_DELAY = 15000;
@@ -667,6 +668,12 @@ export async function renderKanbanBoard(
         <h1 class="board-title">${board.name}</h1>
         <div class="board-actions">
           <div id="saveStatus" class="save-status">Все изменения сохранены</div>
+          <input 
+            type="text" 
+            id="kanban-search-input" 
+            class="kanban-search-input"
+            placeholder="Поиск по карточкам..." 
+          />
           ${
             !isViewOnly
               ? `
@@ -906,6 +913,13 @@ export function setupBoardEventListeners(
         const columnId = btn.getAttribute("data-column-id");
         unarchiveCard(taskId, columnId);
       });
+    });
+  }
+
+  const searchInput = document.getElementById("kanban-search-input");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      filterKanbanCards(searchInput.value);
     });
   }
 }
@@ -2834,7 +2848,7 @@ function setupColumnEventListeners(columnElement) {
   });
 }
 
-function openCardDetailModal(taskId) {
+function openCardDetailModal(taskId, options = {}) {
   try {
     const boardData = JSON.parse(currentBoardData.boardData);
 
@@ -2863,6 +2877,10 @@ function openCardDetailModal(taskId) {
     if (!foundTask.checklists) {
       foundTask.checklists = [];
     }
+
+    const isArchived = options.archived || foundTask.archived;
+    const archivedAt = foundTask.archivedAt;
+    const archivedBy = foundTask.archivedBy;
 
     const createdDate = new Date(foundTask.createdAt);
     const formattedDate = createdDate.toLocaleString("ru-RU", {
@@ -3537,9 +3555,96 @@ function openCardDetailModal(taskId) {
         archiveCard(taskId);
       });
     }
+
+    if (isArchived && (archivedAt || archivedBy)) {
+      const sidebar = modalOverlay.querySelector(".card-modal-sidebar");
+      if (sidebar) {
+        const archiveInfo = document.createElement("div");
+        archiveInfo.className = "sidebar-section";
+        archiveInfo.innerHTML = `
+          <h4 class="sidebar-title" style="color:#7c3aed;">Архивировано</h4>
+          <div class="sidebar-archive-info">
+            ${archivedBy ? `<div>Кем: <b>${archivedBy}</b></div>` : ""}
+            ${
+              archivedAt
+                ? `<div>Когда: <b>${new Date(archivedAt).toLocaleString(
+                    "ru-RU"
+                  )}</b></div>`
+                : ""
+            }
+          </div>
+        `;
+        sidebar.insertBefore(archiveInfo, sidebar.firstChild);
+      }
+    }
+
+    if (isArchived) {
+      const header = modalOverlay.querySelector(".card-modal-header");
+      if (header && !header.querySelector(".archived-badge")) {
+        const badge = document.createElement("span");
+        badge.textContent = "В архиве";
+        badge.className = "archived-badge";
+        badge.style.cssText =
+          "margin-left: 16px; color: #fff; background: #7c3aed; border-radius: 6px; padding: 2px 10px; font-size: 13px;";
+        header.appendChild(badge);
+      }
+
+      const modalContainer = modalOverlay.querySelector(".card-detail-modal");
+      if (modalContainer) {
+        modalContainer.addEventListener(
+          "mousedown",
+          (e) => {
+            if (e.target.closest(".card-modal-close")) {
+              return;
+            }
+            e.stopPropagation();
+            e.preventDefault();
+            showWarningToast(
+              "Редактирование архивированной карточки запрещено"
+            );
+          },
+          true
+        );
+
+        modalContainer.addEventListener("focusin", (e) => {
+          if (e.target.closest(".card-modal-close")) {
+            return;
+          }
+          e.stopPropagation();
+          e.preventDefault();
+          showWarningToast("Редактирование архивированной карточки запрещено");
+          if (typeof e.target.blur === "function") e.target.blur();
+        });
+
+        const titleElement = modalContainer.querySelector(
+          ".card-title-editable"
+        );
+        if (titleElement) {
+          titleElement.addEventListener("click", (e) => {
+            showWarningToast(
+              "Редактирование архивированной карточки запрещено"
+            );
+            e.stopPropagation();
+            e.preventDefault();
+          });
+        }
+        const descElement = modalContainer.querySelector(
+          ".card-description-editable"
+        );
+        if (descElement) {
+          descElement.addEventListener("click", (e) => {
+            showWarningToast(
+              "Редактирование архивированной карточки запрещено"
+            );
+            e.stopPropagation();
+            e.preventDefault();
+          });
+        }
+      }
+    }
   } catch (error) {
     console.error("Ошибка при открытии карточки:", error);
-    alert("Не удалось открыть карточку: " + error.message);
+    showWarningToast("Не удалось открыть карточку: " + error.message);
   }
 }
 
@@ -5001,7 +5106,22 @@ function archiveCard(taskId) {
         return;
       }
 
+      let userData;
+      try {
+        userData = JSON.parse(localStorage.getItem("auth_user") || "{}");
+      } catch (e) {
+        userData = {};
+      }
+      const archivedBy =
+        userData.fullname ||
+        ((userData.firstName || "") + " " + (userData.lastName || "")).trim() ||
+        userData.name ||
+        "Пользователь";
+
       boardData.columns[columnIndex].tasks[taskIndex].archived = true;
+      boardData.columns[columnIndex].tasks[taskIndex].archivedAt =
+        new Date().toISOString();
+      boardData.columns[columnIndex].tasks[taskIndex].archivedBy = archivedBy;
       boardData.columns[columnIndex].tasks[taskIndex].updatedAt =
         new Date().toISOString();
 
@@ -5129,18 +5249,64 @@ function renderArchiveSidebarContent() {
     const content = archiveSidebar.querySelector(".archive-sidebar-content");
     if (!content) return;
 
-    if (archivedCards.length === 0) {
-      content.innerHTML =
-        '<div class="archive-empty">Нет архивированных карточек</div>';
+    let searchInput = archiveSidebar.querySelector("#archive-search-input");
+    if (!searchInput) {
+      const searchDiv = document.createElement("div");
+      searchDiv.innerHTML = `
+        <input 
+          type="text" 
+          id="archive-search-input" 
+          class="archive-search-input"
+          placeholder="Поиск по архиву..." 
+        />
+      `;
+      content.parentElement.insertBefore(searchDiv, content);
+      searchInput = searchDiv.querySelector("#archive-search-input");
+    }
+
+    const filterValue =
+      searchInput && searchInput.value
+        ? searchInput.value.trim().toLowerCase()
+        : "";
+    let filteredCards = archivedCards;
+    if (filterValue) {
+      filteredCards = archivedCards.filter(
+        (card) =>
+          (card.title && card.title.toLowerCase().includes(filterValue)) ||
+          (card.description &&
+            card.description.toLowerCase().includes(filterValue))
+      );
+    }
+
+    if (filteredCards.length === 0) {
+      content.innerHTML = filterValue
+        ? '<div class="archive-empty">Ничего не найдено</div>'
+        : '<div class="archive-empty">Нет архивированных карточек</div>';
     } else {
-      content.innerHTML = archivedCards
+      content.innerHTML = filteredCards
         .map(
           (card) => `
-          <div class="archive-card" data-task-id="${card.id}" data-column-id="${card.columnId}">
+          <div class="archive-card" data-task-id="${card.id}" data-column-id="${
+            card.columnId
+          }">
             <div class="archive-card-title">${card.title}</div>
-            <div class="archive-card-meta">Колонка: <b>${card.columnName}</b></div>
+            <div class="archive-card-meta">Колонка: <b>${
+              card.columnName
+            }</b></div>
+            <div class="archive-card-archiveinfo">
+              <span>Кем: <b>${
+                card.archivedBy ? card.archivedBy : "—"
+              }</b></span><br>
+              <span>Когда: <b>${
+                card.archivedAt
+                  ? new Date(card.archivedAt).toLocaleString("ru-RU")
+                  : "—"
+              }</b></span>
+            </div>
             <div class="archive-card-actions">
-              <button class="archive-unarchive-btn" data-task-id="${card.id}" data-column-id="${card.columnId}">Восстановить</button>
+              <button class="archive-unarchive-btn" data-task-id="${
+                card.id
+              }" data-column-id="${card.columnId}">Восстановить</button>
             </div>
           </div>
         `
@@ -5164,5 +5330,39 @@ function renderArchiveSidebarContent() {
         openCardDetailModal(taskId, { archived: true });
       });
     });
+
+    if (searchInput && !searchInput._archiveSearchHandlerAdded) {
+      searchInput.addEventListener("input", () => {
+        renderArchiveSidebarContent();
+      });
+      searchInput._archiveSearchHandlerAdded = true;
+    }
   } catch (error) {}
+}
+
+function filterKanbanCards(query) {
+  const filter = (query || "").trim().toLowerCase();
+  const boardData = JSON.parse(currentBoardData.boardData);
+
+  boardData.columns.forEach((column) => {
+    const columnElement = document.querySelector(
+      `.kanban-column[data-column-id="${column.id}"]`
+    );
+    if (!columnElement) return;
+    const cards = columnElement.querySelectorAll(".kanban-card");
+    cards.forEach((card) => {
+      const taskId = card.getAttribute("data-task-id");
+      const task = column.tasks.find((t) => t.id === taskId);
+      if (!task) {
+        card.style.display = "";
+        return;
+      }
+      const title = (task.title || "").toLowerCase();
+      if (!filter || title.includes(filter)) {
+        card.style.display = "";
+      } else {
+        card.style.display = "none";
+      }
+    });
+  });
 }
