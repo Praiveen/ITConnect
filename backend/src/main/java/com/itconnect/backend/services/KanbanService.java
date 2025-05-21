@@ -149,8 +149,6 @@ public class KanbanService {
                 return null;
             }
 
-            System.out.println("workspace: " + workspace.getName());
-
             boolean isOwner = workspace.getOwner() != null &&
                     user != null &&
                     workspace.getOwner().getUserId() != null &&
@@ -164,13 +162,10 @@ public class KanbanService {
                 WorkspaceMember member = memberRepository.findByWorkspaceAndUser(workspace, user);
                 if (member != null) {
                     role = member.getRole();
-                    System.out.println("Роль пользователя: " + role);
                 } else {
-                    System.err.println("Пользователь не является участником рабочего пространства");
                     return null;
                 }
             } else {
-                System.out.println("Пользователь является владельцем");
             }
 
             if (!isOwner

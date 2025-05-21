@@ -40,26 +40,20 @@ public class WorkspaceService {
 
         try {
 
-            System.out.println("userId: " + user.getUserId());
             List<Workspace> ownedWorkspaces = workspaceRepository.findByOwner(user);
-            System.out.println("Owned workspaces: " + ownedWorkspaces.size());
-
             List<WorkspaceMember> memberships = memberRepository.findByUser(user);
             List<Workspace> memberWorkspaces = new ArrayList<>();
-
+            
             for (WorkspaceMember membership : memberships) {
                 if (membership != null && membership.getWorkspace() != null) {
                     memberWorkspaces.add(membership.getWorkspace());
                 }
             }
 
-            System.out.println("Member workspaces: " + memberWorkspaces.size());
-
             List<Workspace> combinedList = new ArrayList<>();
 
             for (Workspace workspace : ownedWorkspaces) {
-                System.out.println("Adding owned workspace: " + workspace.getId() + ", owner: " +
-                        (workspace.getOwner() != null ? workspace.getOwner().getUserId() : "null"));
+
                 combinedList.add(workspace);
             }
 
@@ -78,8 +72,6 @@ public class WorkspaceService {
                     combinedList.add(workspace);
                 }
             }
-
-            System.out.println("Combined workspaces: " + combinedList.size());
 
             List<WorkspaceDto> result = new ArrayList<>();
 
@@ -658,7 +650,6 @@ public class WorkspaceService {
      */
     private WorkspaceDto convertToDto(Workspace workspace) {
         if (workspace == null) {
-            System.out.println("convertToDto: workspace is null");
             return null;
         }
 
@@ -683,7 +674,6 @@ public class WorkspaceService {
                 List<WorkspaceMember> members = memberRepository.findByWorkspace(workspace);
                 dto.setMembersCount(members != null ? members.size() : 0);
             } catch (Exception e) {
-                System.out.println("Ошибка при получении списка участников: " + e.getMessage());
                 dto.setMembersCount(0);
             }
 
@@ -691,7 +681,6 @@ public class WorkspaceService {
 
             return dto;
         } catch (Exception e) {
-            System.out.println("Ошибка в convertToDto: " + e.getMessage());
             e.printStackTrace();
             return null;
         }

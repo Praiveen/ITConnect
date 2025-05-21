@@ -10,6 +10,7 @@ import {
   invalidateWorkspaceChatsCache,
   getBoardsCache,
   updateBoardsCache,
+  invalidateWorkspacesCache,
 } from "./DashboardSidebar.js";
 import { kanbanService } from "../services/kanban-service.js";
 
@@ -496,6 +497,21 @@ export async function createNewWorkspace() {
         );
         
         showSuccessToast(`Рабочее пространство "${name}" успешно создано`);
+
+        invalidateWorkspacesCache(); 
+
+        
+        console.log("[WorkspaceManager] Генерируется событие sidebarShouldRefresh для рабочего пространства (создание)");
+        document.dispatchEvent(
+          new CustomEvent("sidebarShouldRefresh", {
+            detail: {
+              type: "workspace",
+              action: "created",
+              workspaceId: newWorkspace.id,
+            },
+          })
+        );
+        
         closeModal();
     navigateToWorkspace(newWorkspace.id);
         resolve(true);
@@ -1148,6 +1164,20 @@ export async function editWorkspace(workspace) {
             "Рабочее пространство успешно обновлено без перезагрузки страницы"
           );
           showSuccessToast("Рабочее пространство успешно обновлено");
+
+          invalidateWorkspacesCache(); 
+
+          
+          console.log("[WorkspaceManager] Генерируется событие sidebarShouldRefresh для рабочего пространства (обновление)");
+          document.dispatchEvent(
+            new CustomEvent("sidebarShouldRefresh", {
+              detail: {
+                type: "workspace",
+                action: "updated",
+                workspaceId: workspace.id,
+              },
+            })
+          );
     } else {
       window.location.reload();
     }
@@ -1887,8 +1917,26 @@ export async function deleteWorkspace(workspace) {
       try {
         await workspaceService.deleteWorkspace(workspace.id);
         showSuccessToast("Рабочее пространство успешно удалено");
+
+        invalidateWorkspacesCache(); 
+        
+        // Генерируем событие для обновления сайдбара
+        console.log("[WorkspaceManager] Генерируется событие sidebarShouldRefresh для рабочего пространства (удаление)");
+        document.dispatchEvent(
+          new CustomEvent("sidebarShouldRefresh", {
+            detail: {
+              type: "workspace",
+              action: "deleted",
+              workspaceId: workspace.id,
+              // Можно добавить флаг, что нужно перейти на /dashboard после обновления
+              navigateToDashboardHome: true 
+            },
+          })
+        );
+        
         closeModal();
-        window.location.hash = "/dashboard";
+        // Убираем немедленную навигацию отсюда, если хотим, чтобы dashboard.js сделал это после обновления
+        // window.location.hash = "/dashboard"; 
         resolve(true);
       } catch (error) {
         console.error(

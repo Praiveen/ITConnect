@@ -44,6 +44,12 @@ export function invalidateAllUserChatsCache() {
   console.log("[САЙДБАР] Кэш ВСЕХ чатов пользователя инвалидирован.");
 }
 
+export function invalidateWorkspacesCache() {
+  workspacesCache = null;
+  lastWorkspacesFetchTime = 0;
+  console.log("[САЙДБАР] Кэш рабочих пространств был инвалидирован.");
+}
+
 export async function renderDashboardSidebar(
   activeEntityId = null,
   activeWorkspaceIdFromDashboard = null
@@ -353,7 +359,7 @@ export async function renderDashboardSidebar(
     workspacesHtml = workspacesHtml.join("");
   } else {
     workspacesHtml =
-      '<div class="workspaces-empty">Нет доступных рабочих пространств</div>';
+      '<div class="workspaces-empty">Нет доступных рабочих пространств или они не созданы</div>';
   }
 
   return `

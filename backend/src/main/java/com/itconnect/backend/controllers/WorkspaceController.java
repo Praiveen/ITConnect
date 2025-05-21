@@ -43,14 +43,6 @@ public class WorkspaceController {
         }
 
         List<WorkspaceDto> workspaces = workspaceService.getAllWorkspacesByUser(currentUser);
-
-        System.out.println("В контроллере получены рабочие пространства: " + workspaces.size());
-        for (WorkspaceDto workspace : workspaces) {
-            System.out.println("Workspace ID: " + workspace.getId() +
-                    ", name: " + workspace.getName() +
-                    ", owner flag: " + workspace.isOwner());
-        }
-
         return ResponseEntity.ok(workspaces);
     }
 
@@ -65,8 +57,6 @@ public class WorkspaceController {
                     .body(new ResponseDto("Пользователь не авторизован", false));
         }
         WorkspaceDto workspace = workspaceService.getWorkspaceById(id, currentUser);
-        System.out.println(workspace);
-        System.out.println("getWorkspaccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccce");
         if (workspace == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ResponseDto("Рабочая область не найдена", false));

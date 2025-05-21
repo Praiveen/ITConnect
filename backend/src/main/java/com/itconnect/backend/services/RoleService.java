@@ -36,8 +36,7 @@ public class RoleService {
                     Optional<Role> roleOptional = roleRepository.findByName(addRole);
                     
                     if (!roleOptional.isPresent()) {
-                        roleRepository.findAll().forEach(role -> 
-                            System.out.println("- " + role.getName()));
+                        roleRepository.findAll().forEach(role -> System.out.println("- " + role.getName()));
                         throw new RuntimeException("Role " + addRole + " not found");
                     }
                     

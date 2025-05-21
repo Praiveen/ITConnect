@@ -41,7 +41,6 @@ public class ChatController {
     public ResponseEntity<?> createChat(
             @PathVariable Long workspaceId,
             @RequestBody CreateChatRequestDto createChatRequestDto) {
-        System.out.println(createChatRequestDto);
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

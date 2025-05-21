@@ -64,8 +64,6 @@ public class NotificationController {
         }
 
         List<Notification> notifications = notificationService.getUnreadNotifications(currentUser);
-        System.out.println("notifications: " + notifications);
-        System.out.println("ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
         List<NotificationDto> notificationDtos = NotificationDto.fromEntities(notifications);
         return ResponseEntity.ok(notificationDtos);
     }

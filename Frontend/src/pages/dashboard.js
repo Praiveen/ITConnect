@@ -626,4 +626,8 @@ async function handleSidebarRefreshEvent(event) {
   );
 
   await refreshDashboardSidebar();
+
+  if (event.detail && event.detail.action === "deleted" && event.detail.navigateToDashboardHome) {
+    window.location.hash = "/dashboard";
+  }
 }
