@@ -1,7 +1,18 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function getApiUrl(path) {
+  // path должен начинаться с /
+  if (API_BASE_URL) {
+    return API_BASE_URL + path;
+  }
+  // Если переменная не задана (локальная разработка) — используем прокси
+  return '/api' + path;
+}
+
 class KanbanService {
   async getBoards() {
     try {
-      const response = await fetch("/api/boards", {
+      const response = await fetch(getApiUrl('/boards'), {
         method: "GET",
         credentials: "include",
         headers: {
@@ -23,7 +34,7 @@ class KanbanService {
 
   async getBoard(boardId) {
     try {
-      const response = await fetch(`/api/boards/${boardId}`, {
+      const response = await fetch(getApiUrl(`/boards/${boardId}`), {
         method: "GET",
         credentials: "include",
         headers: {
@@ -45,7 +56,7 @@ class KanbanService {
 
   async createBoard(boardData) {
     try {
-      const response = await fetch("/api/boards", {
+      const response = await fetch(getApiUrl('/boards'), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -68,7 +79,7 @@ class KanbanService {
 
   async updateBoard(boardId, boardData) {
     try {
-      const response = await fetch(`/api/boards/${boardId}`, {
+      const response = await fetch(getApiUrl(`/boards/${boardId}`), {
         method: "PUT",
         credentials: "include",
         headers: {
@@ -91,7 +102,7 @@ class KanbanService {
 
   async deleteBoard(boardId) {
     try {
-      const response = await fetch(`/api/boards/${boardId}`, {
+      const response = await fetch(getApiUrl(`/boards/${boardId}`), {
         method: "DELETE",
         credentials: "include",
         headers: {

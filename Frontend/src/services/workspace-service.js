@@ -1,3 +1,14 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function getApiUrl(path) {
+  // path должен начинаться с /
+  if (API_BASE_URL) {
+    return API_BASE_URL + path;
+  }
+  // Если переменная не задана (локальная разработка) — используем прокси
+  return '/api' + path;
+}
+
 class WorkspaceService {
   constructor() {
     this.baseUrl = "/api";
@@ -5,7 +16,7 @@ class WorkspaceService {
 
   async getAllWorkspaces() {
     try {
-      const response = await fetch("/api/workspaces", {
+      const response = await fetch(getApiUrl('/workspaces'), {
         method: "GET",
         credentials: "include",
         headers: {
@@ -50,7 +61,7 @@ class WorkspaceService {
 
     try {
       console.log(`Запрос данных рабочего пространства ${workspaceId}...`);
-      const response = await fetch(`/api/workspaces/${workspaceId}`, {
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}`), {
         method: "GET",
         credentials: "include",
         headers: {
@@ -92,7 +103,7 @@ class WorkspaceService {
 
   async createWorkspace(workspaceData) {
     try {
-      const response = await fetch("/api/workspaces", {
+      const response = await fetch(getApiUrl('/workspaces'), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -117,7 +128,7 @@ class WorkspaceService {
 
   async updateWorkspace(workspaceId, workspaceData) {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}`, {
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}`), {
         method: "PUT",
         credentials: "include",
         headers: {
@@ -145,7 +156,7 @@ class WorkspaceService {
 
   async deleteWorkspace(workspaceId) {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}`, {
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}`), {
         method: "DELETE",
         credentials: "include",
         headers: {
@@ -172,7 +183,7 @@ class WorkspaceService {
 
   async addMember(workspaceId, userId, role = "MEMBER") {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/members`, {
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/members`), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -201,16 +212,13 @@ class WorkspaceService {
 
   async removeMember(workspaceId, userId) {
     try {
-      const response = await fetch(
-        `/api/workspaces/${workspaceId}/members/${userId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/members/${userId}`), {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -234,17 +242,14 @@ class WorkspaceService {
         role: userData.role || "MEMBER",
       };
 
-      const response = await fetch(
-        `/api/workspaces/${workspaceId}/invitations`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(invitationData),
-        }
-      );
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/invitations`), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(invitationData),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -269,19 +274,16 @@ class WorkspaceService {
     }
 
     try {
-      const response = await fetch(
-        `/api/workspaces/${workspaceId}/members/${userId}/role`,
-        {
-          method: "PUT",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            role: newRole,
-          }),
-        }
-      );
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/members/${userId}/role`), {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role: newRole,
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -309,7 +311,7 @@ class WorkspaceService {
       throw new Error("Неверный ID рабочего пространства");
     }
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/chats`, {
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/chats`), {
         method: "GET",
         credentials: "include",
         headers: {
@@ -349,7 +351,7 @@ class WorkspaceService {
       throw new Error("Не указано имя для нового чата");
     }
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/chats`, {
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/chats`), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -382,17 +384,14 @@ class WorkspaceService {
       throw new Error("Не указаны данные для обновления чата, как минимум имя");
     }
     try {
-      const response = await fetch(
-        `/api/workspaces/${workspaceId}/chats/${chatId}`,
-        {
-          method: "PUT",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(chatData),
-        }
-      );
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/chats/${chatId}`), {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(chatData),
+      });
 
       if (!response.ok) {
         const errorData = await response
@@ -417,16 +416,13 @@ class WorkspaceService {
       );
     }
     try {
-      const response = await fetch(
-        `/api/workspaces/${workspaceId}/chats/${chatId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(getApiUrl(`/workspaces/${workspaceId}/chats/${chatId}`), {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
         const errorData = await response
@@ -456,7 +452,7 @@ class WorkspaceService {
     }
     try {
       const response = await fetch(
-        `${this.baseUrl}/workspaces/${workspaceId}/chats/${chatId}`,
+        getApiUrl(`/workspaces/${workspaceId}/chats/${chatId}`),
         {
           method: "GET",
           credentials: "include",
@@ -504,7 +500,7 @@ class WorkspaceService {
     }
     try {
       const response = await fetch(
-        `${this.baseUrl}/workspaces/${workspaceId}/chats/${chatId}/messages?page=${page}&size=${size}&sort=sentAt,asc`,
+        getApiUrl(`/workspaces/${workspaceId}/chats/${chatId}/messages?page=${page}&size=${size}&sort=sentAt,asc`),
         {
           method: "GET",
           credentials: "include",
@@ -537,7 +533,7 @@ class WorkspaceService {
 
   async getAllUserChats() {
     try {
-      const response = await fetch("/api/chats/all", {
+      const response = await fetch(getApiUrl('/chats/all'), {
         method: "GET",
         credentials: "include",
         headers: {

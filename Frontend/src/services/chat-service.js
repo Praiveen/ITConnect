@@ -1,7 +1,19 @@
 import SockJS from "sockjs-client/dist/sockjs.min.js";
 import Stomp from "stompjs";
 
-const SOCKET_URL = "/api/ws";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function getApiUrl(path) {
+  // path должен начинаться с /
+  if (API_BASE_URL) {
+    return API_BASE_URL + path;
+  }
+  // Если переменная не задана (локальная разработка) — используем прокси
+  return '/api' + path;
+}
+
+// Для WebSocket нужен полный адрес
+const SOCKET_URL = getApiUrl('/ws');
 
 class ChatService {
   constructor() {
@@ -260,3 +272,4 @@ class ChatService {
 }
 
 export const chatService = new ChatService();
+export { getApiUrl };

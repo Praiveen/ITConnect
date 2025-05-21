@@ -1,11 +1,22 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function getApiUrl(path) {
+  // path должен начинаться с /
+  if (API_BASE_URL) {
+    return API_BASE_URL + path;
+  }
+  // Если переменная не задана (локальная разработка) — используем прокси
+  return '/api' + path;
+}
+
 class NotificationService {
   constructor() {
-    this.baseUrl = "/api/notifications";
+    this.baseUrl = getApiUrl('/notifications');
   }
 
   async getNotifications() {
     try {
-      const response = await fetch(`${this.baseUrl}`, {
+      const response = await fetch(this.baseUrl, {
         method: "GET",
         credentials: "include",
         headers: {
