@@ -78,7 +78,7 @@ export function renderLoginPage() {
         const userData = await authService.login(email, password);
 
         const redirectUrl =
-          sessionStorage.getItem("redirectAfterAuth") || "/profile";
+          sessionStorage.getItem("redirectAfterAuth") || "/dashboard";
 
         sessionStorage.removeItem("redirectAfterAuth");
 
