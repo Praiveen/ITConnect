@@ -378,10 +378,10 @@ public class WorkspaceService {
                     currentUser.getUserId() != null &&
                     workspace.getOwner().getUserId().equals(currentUser.getUserId());
 
-            WorkspaceRole currentUserRole = workspace.getMemberRoleSafe(currentUser);
-            boolean isAdmin = WorkspaceRole.ADMIN.equals(currentUserRole);
 
-            if (!isOwner && !isAdmin) {
+            // WorkspaceRole currentUserRole = workspace.getMemberRoleSafe(currentUser);
+            // boolean isAdmin = WorkspaceRole.ADMIN.equals(currentUserRole);
+            if (!isOwner) {
                 return false;
             }
 
@@ -399,7 +399,6 @@ public class WorkspaceService {
             if (isUserToRemoveOwner) {
                 return false;
             }
-
             WorkspaceMember member = memberRepository.findByWorkspaceAndUser(workspace, userToRemove);
             if (member != null) {
                 memberRepository.delete(member);

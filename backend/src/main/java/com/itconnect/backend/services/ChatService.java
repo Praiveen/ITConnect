@@ -342,6 +342,47 @@ public class ChatService {
         return convertToChatDto(updatedChat, currentUser.getUserId());
     }
 
+    @Transactional
+    public boolean deleteChat(Long workspaceId, Long chatId, User currentUser) {
+        Chat chat = chatRepository.findByIdAndWorkspaceId(chatId, workspaceId).orElse(null);
+        if (chat == null) {
+            return false;
+        }
+
+        Workspace workspace = chat.getWorkspace();
+
+        boolean isOwner = workspace.getOwner() != null &&
+                currentUser != null &&
+                workspace.getOwner().getUserId() != null &&
+                currentUser.getUserId() != null &&
+                workspace.getOwner().getUserId().equals(currentUser.getUserId());
+
+        boolean isCreator = chat.getCreator() != null &&
+                currentUser != null &&
+                chat.getCreator().getUserId() != null &&
+                currentUser.getUserId() != null &&
+                chat.getCreator().getUserId().equals(currentUser.getUserId());
+
+        boolean isMember = false;
+        if (!isOwner && !isCreator) {
+            WorkspaceMember member = memberRepository.findByWorkspaceAndUser(workspace, currentUser);
+            isMember = member != null;
+        }
+
+        // Только владелец рабочего пространства или создатель чата может удалять чат
+        if (!isOwner && !isCreator) {
+            return false;
+        }
+
+        // Удаляем все сообщения чата (если нужно)
+        chatMessageRepository.deleteAll(chatMessageRepository.findByChatId(chatId));
+
+        // Удаляем сам чат
+        chatRepository.delete(chat);
+
+        return true;
+    }
+
     private ChatMessageDto convertToChatMessageDto(ChatMessage message) {
         Hibernate.initialize(message.getReadByUsersIds());
 

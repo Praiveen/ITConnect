@@ -9,6 +9,9 @@ import com.itconnect.backend.dto.ResponseDto;
 import com.itconnect.backend.entities.User;
 import com.itconnect.backend.services.ChatService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.engine.internal.Collections;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -19,11 +22,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+
 import java.util.List;
 
 @RestController
 @RequestMapping("/workspaces/{workspaceId}/chats")
 @RequiredArgsConstructor
+@Slf4j
 public class ChatController {
 
     private final ChatService chatService;
@@ -36,10 +41,10 @@ public class ChatController {
         return null;
     }
 
-   
+
     @PostMapping
     public ResponseEntity<?> createChat(
-            @PathVariable Long workspaceId,
+            @PathVariable("workspaceId") Long workspaceId,
             @RequestBody CreateChatRequestDto createChatRequestDto) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
@@ -79,8 +84,8 @@ public class ChatController {
    
     @GetMapping("/{chatId}")
     public ResponseEntity<?> getChatById(
-            @PathVariable Long workspaceId,
-            @PathVariable Long chatId) {
+            @PathVariable("workspaceId") Long workspaceId,
+            @PathVariable("chatId") Long chatId) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -102,8 +107,8 @@ public class ChatController {
    
     @PostMapping("/{chatId}/messages")
     public ResponseEntity<?> sendMessage(
-            @PathVariable Long workspaceId, 
-            @PathVariable Long chatId,
+            @PathVariable("workspaceId") Long workspaceId, 
+            @PathVariable("chatId") Long chatId,
             @RequestBody SendMessageRequestDto sendMessageRequestDto) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
@@ -132,9 +137,11 @@ public class ChatController {
    
     @GetMapping("/{chatId}/messages")
     public ResponseEntity<?> getMessagesByChat(
-            @PathVariable Long workspaceId,
-            @PathVariable Long chatId,
+            @PathVariable("workspaceId") Long workspaceId,
+            @PathVariable("chatId") Long chatId,
             @PageableDefault(size = 20, sort = "sentAt", direction = Sort.Direction.ASC) Pageable pageable) {
+        System.out.println("getMessagesByChatssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss");
+        log.info("getMessagesByChat CALLED");
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -142,23 +149,26 @@ public class ChatController {
         }
         try {
             ChatDto chatDto = chatService.getChatById(workspaceId, chatId, currentUser);
-             if (chatDto == null) {
-                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ResponseDto("Доступ к сообщениям чата запрещен или чат не найден.", false));
+            if (chatDto == null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ResponseDto("Доступ к сообщениям чата запрещен или чат не найден.", false));
             }
             Page<ChatMessageDto> messages = chatService.getMessagesByChat(chatId, currentUser, pageable);
+            // if (messages == null) {
+            //     return ResponseEntity.ok(Page.empty(pageable));
+            // }
             return ResponseEntity.ok(messages);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                     .body(new ResponseDto("Ошибка при получении сообщений: " + e.getMessage(), false));
+                    .body(new ResponseDto("Ошибка при получении сообщений: " + e.getMessage(), false));
         }
     }
 
    
     @PutMapping("/{chatId}")
     public ResponseEntity<?> updateChat(
-            @PathVariable Long workspaceId,
-            @PathVariable Long chatId,
+            @PathVariable("workspaceId") Long workspaceId,
+            @PathVariable("chatId") Long chatId,
             @RequestBody UpdateChatRequestDto updateChatRequestDto) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
@@ -180,9 +190,9 @@ public class ChatController {
    
     @PostMapping("/{chatId}/messages/{messageId}/read")
     public ResponseEntity<?> markMessageAsRead(
-            @PathVariable Long workspaceId,
-            @PathVariable Long chatId,
-            @PathVariable Long messageId) {
+            @PathVariable("workspaceId") Long workspaceId,
+            @PathVariable("chatId") Long chatId,
+            @PathVariable("messageId") Long messageId) {
         User currentUser = getCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -203,6 +213,29 @@ public class ChatController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseDto("Ошибка при отметке сообщения как прочитанного: " + e.getMessage(), false));
+        }
+    }
+
+    @DeleteMapping("/{chatId}")
+    public ResponseEntity<?> deleteChat(
+            @PathVariable("workspaceId") Long workspaceId,
+            @PathVariable("chatId") Long chatId) {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ResponseDto("Пользователь не авторизован", false));
+        }
+        try {
+            boolean deleted = chatService.deleteChat(workspaceId, chatId, currentUser);
+            if (deleted) {
+                return ResponseEntity.ok(new ResponseDto("Чат успешно удалён.", true));
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ResponseDto("Не удалось удалить чат. Проверьте права доступа или ID чата.", false));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseDto("Ошибка при удалении чата: " + e.getMessage(), false));
         }
     }
 } 

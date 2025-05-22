@@ -1,10 +1,13 @@
 package com.itconnect.backend.controllers;
 
+import com.itconnect.backend.dto.CreateChatRequestDto;
+import com.itconnect.backend.dto.ChatDto;
 import com.itconnect.backend.dto.ResponseDto;
 import com.itconnect.backend.dto.WorkspaceDto;
 import com.itconnect.backend.entities.Notification;
 import com.itconnect.backend.entities.User;
 import com.itconnect.backend.entities.WorkspaceRole;
+import com.itconnect.backend.services.ChatService;
 import com.itconnect.backend.services.UserService;
 import com.itconnect.backend.services.WorkspaceService;
 
@@ -25,10 +28,12 @@ public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
     private final UserService userService;
+    private final ChatService chatService;
 
-    public WorkspaceController(WorkspaceService workspaceService, UserService userService) {
+    public WorkspaceController(WorkspaceService workspaceService, UserService userService, ChatService chatService) {
         this.workspaceService = workspaceService;
         this.userService = userService;
+        this.chatService = chatService;
     }
 
     /**
@@ -175,7 +180,8 @@ public class WorkspaceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ResponseDto("Пользователь не авторизован", false));
         }
-
+        System.out.println("removeMember CALLEDddddqqqqqqqqqqqqqqqqqqq" + id);
+        System.out.println("removeMember CALLEDddddqqqqqqqqqqqqqqqqqqq" + id + " " + userId + " " + currentUser);
         boolean removed = workspaceService.removeMember(id, userId, currentUser);
         if (!removed) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

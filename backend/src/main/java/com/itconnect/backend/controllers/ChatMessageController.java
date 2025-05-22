@@ -28,7 +28,7 @@ public class ChatMessageController {
     private final ChatService chatService;
 
     @MessageMapping("/chat.sendMessage/{chatId}")
-    public void sendMessage(@DestinationVariable Long chatId,
+    public void sendMessage(@DestinationVariable("chatId") Long chatId,
             @Payload SendMessageRequestDto messagePayload,
             SimpMessageHeaderAccessor headerAccessor) {
 
@@ -74,7 +74,7 @@ public class ChatMessageController {
     }
 
     @MessageMapping("/chat.typing/{chatId}")
-    public void userTyping(@DestinationVariable Long chatId,
+    public void userTyping(@DestinationVariable("chatId") Long chatId,
             @Payload Map<String, String> payload,
             SimpMessageHeaderAccessor headerAccessor) {
         Principal principal = headerAccessor.getUser();
@@ -96,8 +96,8 @@ public class ChatMessageController {
     }
 
     @MessageMapping("/chat.readMessage/{chatId}/{messageId}")
-    public void markMessageAsRead(@DestinationVariable Long chatId,
-            @DestinationVariable Long messageId,
+    public void markMessageAsRead(@DestinationVariable("chatId") Long chatId,
+            @DestinationVariable("messageId") Long messageId,
             SimpMessageHeaderAccessor headerAccessor) {
         Principal principal = headerAccessor.getUser();
         if (principal == null || !(principal instanceof UsernamePasswordAuthenticationToken))
@@ -122,8 +122,8 @@ public class ChatMessageController {
     }
 
     @MessageMapping("/chat.editMessage/{chatId}/{messageId}")
-    public void editMessage(@DestinationVariable Long chatId,
-            @DestinationVariable Long messageId,
+    public void editMessage(@DestinationVariable("chatId") Long chatId,
+            @DestinationVariable("messageId") Long messageId,
             @Payload EditMessageRequestDto editPayload,
             SimpMessageHeaderAccessor headerAccessor) {
         Principal principal = headerAccessor.getUser();
@@ -175,8 +175,8 @@ public class ChatMessageController {
      * Метод для обработки удаления сообщения.
      */
     @MessageMapping("/chat.deleteMessage/{chatId}/{messageId}")
-    public void deleteMessage(@DestinationVariable Long chatId,
-            @DestinationVariable Long messageId,
+    public void deleteMessage(@DestinationVariable("chatId") Long chatId,
+            @DestinationVariable("messageId") Long messageId,
             SimpMessageHeaderAccessor headerAccessor) {
         Principal principal = headerAccessor.getUser();
         if (principal == null) {
