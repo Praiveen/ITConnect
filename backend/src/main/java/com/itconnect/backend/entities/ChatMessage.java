@@ -47,4 +47,8 @@ public class ChatMessage {
     @Builder.Default
     private List<Long> readByUsersIds = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_message_id", referencedColumnName = "id", nullable = true)
+    private ChatMessage parentMessage;
+
 } 

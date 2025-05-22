@@ -12,6 +12,8 @@ import { authService } from "../services/auth-service.js";
 let currentChatId = null;
 let currentWorkspaceId = null;
 let messageListener = null;
+let currentReplyToMessageId = null;
+let currentReplyToPreview = null;
 
 const CHAT_HISTORY_CACHE_TIMEOUT = 5 * 60 * 1000;
 let chatHistoryCache = {};
@@ -107,6 +109,30 @@ function createMessageElement(msg, isContinuation = false) {
     editedMarkerSpan.textContent = " (изменено)";
     messageTextDiv.appendChild(editedMarkerSpan);
   }
+
+  if (msg.parentMessagePreview) {
+    const replyDiv = document.createElement("div");
+    replyDiv.className = "chat-reply-block";
+    replyDiv.innerHTML = `
+      <div class="reply-block-accent"></div>
+      <div class="reply-block-main">
+        <span class="reply-block-username">${msg.parentMessagePreview.senderName}</span>
+        <span class="reply-block-content">${msg.parentMessagePreview.contentPreview || ""}</span>
+      </div>
+    `;
+    replyDiv.style.cursor = "pointer";
+    replyDiv.title = "Показать исходное сообщение";
+    replyDiv.onclick = () => {
+      const target = document.querySelector(`.chat-ui-message[data-message-id="${msg.parentMessagePreview.id}"]`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("highlighted-message");
+        setTimeout(() => target.classList.remove("highlighted-message"), 1800);
+      }
+    };
+    messageBody.appendChild(replyDiv);
+  }
+
   messageBody.appendChild(messageTextDiv);
 
   const editFormContainer = document.createElement("div");
@@ -133,6 +159,18 @@ function createMessageElement(msg, isContinuation = false) {
   const deleteBtn = messageDiv.querySelector(".delete-message-btn");
   if (deleteBtn) {
     deleteBtn.addEventListener("click", () => confirmDeleteMessage(msg.id));
+  }
+
+  const replyBtn = messageDiv.querySelector('[data-action="reply"]');
+  if (replyBtn) {
+    replyBtn.addEventListener("click", () => {
+      currentReplyToMessageId = msg.id;
+      currentReplyToPreview = {
+        senderName: msg.senderName,
+        content: msg.content
+      };
+      showReplyPreview();
+    });
   }
 
   return messageDiv;
@@ -394,8 +432,12 @@ function setupChatInput() {
         if (!currentChatId || !messageInput) return;
         const content = messageInput.value.trim();
         if (content) {
-            chatService.sendMessage(currentChatId, content);
+            chatService.sendMessage(currentChatId, content, currentReplyToMessageId);
       messageInput.value = "";
+      currentReplyToMessageId = null;
+      currentReplyToPreview = null;
+      const replyPreview = document.getElementById("reply-preview");
+      if (replyPreview) replyPreview.style.display = "none";
         }
     };
 
@@ -764,4 +806,35 @@ function deleteMessageFromDOM(messageId) {
       }
     }
   }
+}
+
+function showReplyPreview() {
+  let replyPreview = document.getElementById("reply-preview");
+  const chatInputArea = document.querySelector(".chat-input-area");
+  if (!replyPreview) {
+    replyPreview = document.createElement("div");
+    replyPreview.id = "reply-preview";
+    replyPreview.className = "chat-reply-preview-block";
+    chatInputArea.parentNode.insertBefore(replyPreview, chatInputArea);
+  }
+  replyPreview.innerHTML = `
+    <div class="reply-preview-main">
+      <div class="reply-preview-label">Отвечает на <b>${currentReplyToPreview.senderName}</b></div>
+      <div class="reply-preview-content">${currentReplyToPreview.content.slice(0, 120)}${currentReplyToPreview.content.length > 120 ? "..." : ""}</div>
+    </div>
+    <button class="cancel-reply-btn" title="Отменить ответ">&times;</button>
+  `;
+  replyPreview.style.display = "flex";
+  replyPreview.querySelector(".cancel-reply-btn").onclick = () => {
+    currentReplyToMessageId = null;
+    currentReplyToPreview = null;
+    replyPreview.style.display = "none";
+  };
+
+  setTimeout(() => {
+    const messagesContainer = document.getElementById("chat-messages");
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }, 0);
 }

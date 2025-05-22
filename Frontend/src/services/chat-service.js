@@ -198,10 +198,9 @@ class ChatService {
     }
   }
 
-  sendMessage(chatId, messageContent) {
+  sendMessage(chatId, messageContent, parentMessageId = null) {
     if (!this.stompClient || !this.stompClient.connected) {
       console.error("Невозможно отправить сообщение: STOMP не подключен.");
-
       return;
     }
     if (!chatId || !messageContent.trim()) {
@@ -213,6 +212,9 @@ class ChatService {
     const payload = {
       content: messageContent,
     };
+    if (parentMessageId) {
+      payload.parentMessageId = parentMessageId;
+    }
 
     try {
       this.stompClient.send(destination, {}, JSON.stringify(payload));

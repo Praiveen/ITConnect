@@ -3,6 +3,7 @@ package com.itconnect.backend.services;
 import com.itconnect.backend.dto.ChatDto;
 import com.itconnect.backend.dto.ChatMessageDto;
 import com.itconnect.backend.dto.CreateChatRequestDto;
+import com.itconnect.backend.dto.ParentMessagePreviewDto;
 import com.itconnect.backend.dto.UpdateChatRequestDto;
 import com.itconnect.backend.entities.Chat;
 import com.itconnect.backend.entities.ChatMessage;
@@ -98,7 +99,6 @@ public class ChatService {
             return List.of();
         }
 
-
         List<Chat> chats = chatRepository.findByWorkspaceId(workspaceId);
         return chats.stream()
                 .map(chat -> convertToChatDto(chat, currentUser.getUserId()))
@@ -147,7 +147,7 @@ public class ChatService {
     }
 
     @Transactional
-    public ChatMessageDto sendMessage(Long chatId, String content, User sender) {
+    public ChatMessageDto sendMessage(Long chatId, String content, Long parentMessageId, User sender) {
         Chat chat = chatRepository.findById(chatId).orElse(null);
         if (chat == null) {
             return null;
@@ -173,19 +173,26 @@ public class ChatService {
             return null;
         }
 
-        ChatMessage message = ChatMessage.builder()
+        ChatMessage parentMessage = null;
+        if (parentMessageId != null) {
+            parentMessage = chatMessageRepository.findById(parentMessageId)
+                    .orElse(null);
+        }
+
+        ChatMessage chatMessage = ChatMessage.builder()
                 .chat(chat)
                 .sender(sender)
                 .content(content)
+                .parentMessage(parentMessage)
                 .sentAt(LocalDateTime.now())
                 .build();
 
-        message = chatMessageRepository.save(message);
+        ChatMessage savedMessage = chatMessageRepository.save(chatMessage);
 
         chat.setUpdatedAt(LocalDateTime.now());
         chatRepository.save(chat);
 
-        return convertToChatMessageDto(message);
+        return convertToChatMessageDto(savedMessage);
     }
 
     @Transactional(readOnly = true)
@@ -296,13 +303,14 @@ public class ChatService {
     }
 
     @Transactional
-    public ChatDto updateChat(Long workspaceId, Long chatId, UpdateChatRequestDto updateChatRequestDto, User currentUser) {
+    public ChatDto updateChat(Long workspaceId, Long chatId, UpdateChatRequestDto updateChatRequestDto,
+            User currentUser) {
         Chat chat = chatRepository.findByIdAndWorkspaceId(chatId, workspaceId)
-                .orElseThrow(() -> new RuntimeException("Чат с ID " + chatId + " не найден в рабочем пространстве " + workspaceId));
+                .orElseThrow(() -> new RuntimeException(
+                        "Чат с ID " + chatId + " не найден в рабочем пространстве " + workspaceId));
 
         Workspace workspace = chat.getWorkspace();
 
-        
         boolean isOwner = workspace.getOwner() != null &&
                 currentUser != null &&
                 workspace.getOwner().getUserId() != null &&
@@ -316,19 +324,16 @@ public class ChatService {
         }
 
         if (!isMember && !isOwner) {
-            throw new AccessDeniedException("Пользователь " + currentUser.getUserId() + " не авторизован для обновления чата " + chatId);
+            throw new AccessDeniedException(
+                    "Пользователь " + currentUser.getUserId() + " не авторизован для обновления чата " + chatId);
         }
 
-        
-        
         boolean canEdit = isOwner || chat.getCreator().getUserId().equals(currentUser.getUserId());
-        
-        
 
         if (!canEdit) {
-             throw new AccessDeniedException("Пользователь " + currentUser.getUserId() + " не имеет прав на редактирование чата " + chatId);
+            throw new AccessDeniedException(
+                    "Пользователь " + currentUser.getUserId() + " не имеет прав на редактирование чата " + chatId);
         }
-
 
         if (updateChatRequestDto.getName() != null && !updateChatRequestDto.getName().trim().isEmpty()) {
             chat.setName(updateChatRequestDto.getName().trim());
@@ -369,33 +374,58 @@ public class ChatService {
             isMember = member != null;
         }
 
-        // Только владелец рабочего пространства или создатель чата может удалять чат
         if (!isOwner && !isCreator) {
             return false;
         }
 
-        // Удаляем все сообщения чата (если нужно)
         chatMessageRepository.deleteAll(chatMessageRepository.findByChatId(chatId));
 
-        // Удаляем сам чат
         chatRepository.delete(chat);
 
         return true;
     }
 
     private ChatMessageDto convertToChatMessageDto(ChatMessage message) {
-        Hibernate.initialize(message.getReadByUsersIds());
+        ParentMessagePreviewDto parentPreview = null;
+        if (message.getParentMessage() != null) {
+            ChatMessage parent = message.getParentMessage();
+            String contentPreview = parent.getContent();
+            if (contentPreview != null && contentPreview.length() > 70) {
+                contentPreview = contentPreview.substring(0, 70) + "...";
+            }
+
+            String parentSenderName = "Неизвестный отправитель";
+            if (parent.getSender() != null) {
+                parentSenderName = parent.getSender().getFullName();
+                if (parentSenderName == null || parentSenderName.trim().isEmpty()) {
+                    parentSenderName = parent.getSender().getEmail();
+                }
+            }
+
+            parentPreview = ParentMessagePreviewDto.builder()
+                    .id(parent.getId())
+                    .senderName(parentSenderName)
+                    .contentPreview(contentPreview)
+                    .build();
+        }
+
+        String senderName = "Неизвестный отправитель";
+        if (message.getSender() != null) {
+            senderName = message.getSender().getFullName();
+            if (senderName == null || senderName.trim().isEmpty()) {
+                senderName = message.getSender().getEmail();
+            }
+        }
 
         return ChatMessageDto.builder()
                 .id(message.getId())
                 .chatId(message.getChat().getId())
-                .senderId(message.getSender().getUserId())
-                .senderName(message.getSender().getFullName() != null ? message.getSender().getFullName()
-                        : message.getSender().getEmail())
+                .senderId(message.getSender() != null ? message.getSender().getUserId() : null)
+                .senderName(senderName)
                 .content(message.getContent())
                 .sentAt(message.getSentAt())
                 .editedAt(message.getEditedAt())
-                .readByUsersIds(message.getReadByUsersIds())
+                .parentMessagePreview(parentPreview)
                 .build();
     }
 

@@ -9,4 +9,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateChatRequestDto {
     private String name;
+    private String description;
 } 

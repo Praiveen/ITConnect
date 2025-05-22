@@ -5,6 +5,8 @@ import com.itconnect.backend.dto.EditMessageRequestDto;
 import com.itconnect.backend.dto.SendMessageRequestDto;
 import com.itconnect.backend.entities.User;
 import com.itconnect.backend.services.ChatService;
+import com.itconnect.backend.service.SupabaseS3StorageService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -14,6 +16,8 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.util.HashMap;
@@ -22,10 +26,13 @@ import java.util.Map;
 @Controller
 @RequiredArgsConstructor
 @Slf4j
+@RestController
 public class ChatMessageController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatService chatService;
+    private final SupabaseS3StorageService supabaseS3StorageService;
+
 
     @MessageMapping("/chat.sendMessage/{chatId}")
     public void sendMessage(@DestinationVariable("chatId") Long chatId,
@@ -52,12 +59,17 @@ public class ChatMessageController {
             return;
         }
 
-        log.info("Received message to send via WebSocket to chat {}: {} from user {}", chatId,
-                messagePayload.getContent(), currentUser.getUserId());
+        log.info("Received message to send via WebSocket to chat {}: {} from user {} (replying to: {})", chatId,
+                messagePayload.getContent(), currentUser.getUserId(), messagePayload.getParentMessageId());
 
         try {
 
-            ChatMessageDto savedMessageDto = chatService.sendMessage(chatId, messagePayload.getContent(), currentUser);
+            ChatMessageDto savedMessageDto = chatService.sendMessage(
+                    chatId,
+                    messagePayload.getContent(),
+                    messagePayload.getParentMessageId(),
+                    currentUser
+            );
 
             if (savedMessageDto != null) {
 
@@ -220,5 +232,17 @@ public class ChatMessageController {
             }
         }
         return null;
+    }
+
+    @PostMapping("/api/files/upload")
+    public Map<String, Object> uploadFile(@RequestParam("file") MultipartFile file) throws Exception {
+        String url = supabaseS3StorageService.uploadFile(file);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("url", url);
+        result.put("name", file.getOriginalFilename());
+        result.put("type", file.getContentType());
+        result.put("size", file.getSize());
+        return result;
     }
 }

@@ -110,29 +110,34 @@ public class ChatController {
             @PathVariable("workspaceId") Long workspaceId, 
             @PathVariable("chatId") Long chatId,
             @RequestBody SendMessageRequestDto sendMessageRequestDto) {
-        User currentUser = getCurrentUser();
-        if (currentUser == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ResponseDto("Пользователь не авторизован", false));
-        }
-        try {
-            ChatDto chatDto = chatService.getChatById(workspaceId, chatId, currentUser);
-            if (chatDto == null) {
-                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ResponseDto("Доступ к чату запрещен или чат не найден в данном рабочем пространстве.", false));
+                User currentUser = getCurrentUser();
+                if (currentUser == null) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(new ResponseDto("Пользователь не авторизован", false));
+                }
+                try {
+                    ChatDto chatDto = chatService.getChatById(workspaceId, chatId, currentUser);
+                    if (chatDto == null) {
+                         return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(new ResponseDto("Доступ к чату запрещен или чат не найден в данном рабочем пространстве.", false));
+                    }
+        
+                    ChatMessageDto sentMessage = chatService.sendMessage(
+                            chatId,
+                            sendMessageRequestDto.getContent(),
+                            sendMessageRequestDto.getParentMessageId(),
+                            currentUser
+                    );
+                    if (sentMessage == null) {
+                         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(new ResponseDto("Не удалось отправить сообщение. Возможно, чат не найден или нет прав.", false));
+                    }
+                    return new ResponseEntity<>(sentMessage, HttpStatus.CREATED);
+                } catch (Exception e) {
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                            .body(new ResponseDto("Ошибка при отправке сообщения: " + e.getMessage(), false));
+                }
             }
-            
-            ChatMessageDto sentMessage = chatService.sendMessage(chatId, sendMessageRequestDto.getContent(), currentUser);
-            if (sentMessage == null) {
-                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseDto("Не удалось отправить сообщение. Возможно, чат не найден или нет прав.", false));
-            }
-            return new ResponseEntity<>(sentMessage, HttpStatus.CREATED);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseDto("Ошибка при отправке сообщения: " + e.getMessage(), false));
-        }
-    }
 
    
     @GetMapping("/{chatId}/messages")

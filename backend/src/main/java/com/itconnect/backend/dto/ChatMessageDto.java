@@ -21,4 +21,5 @@ public class ChatMessageDto {
     private LocalDateTime editedAt;
     private LocalDateTime sentAt;
     private List<Long> readByUsersIds;
+    private ParentMessagePreviewDto parentMessagePreview;
 } 
