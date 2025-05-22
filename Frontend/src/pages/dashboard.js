@@ -31,16 +31,13 @@ function getBoardIdFromUrl() {
     const queryString = hash.split("?")[1];
     const urlParams = new URLSearchParams(queryString);
     const boardId = urlParams.get("board");
-    console.log(`Получен ID доски из URL: ${boardId}`);
     return boardId;
   }
 
   const urlParams = new URLSearchParams(window.location.search);
   const boardId = urlParams.get("board");
   if (boardId) {
-    console.log(`Получен ID доски из URL параметров: ${boardId}`);
   } else {
-    console.log("ID доски не найден в URL");
   }
   return boardId;
 }
@@ -52,7 +49,6 @@ function getChatIdFromUrl() {
     const urlParams = new URLSearchParams(queryString);
     const chatId = urlParams.get("chat");
     if (chatId) {
-      console.log(`Получен ID чата из URL: ${chatId}`);
     }
     return chatId;
   }
@@ -66,13 +62,8 @@ function getWorkspaceTabFromUrl() {
     const queryString = hash.split("?")[1];
     const urlParams = new URLSearchParams(queryString);
     const tabType = urlParams.get("workspace_tab") || WORKSPACE_TABS.MY;
-    console.log(`Получен тип вкладки рабочего пространства из URL: ${tabType}`);
     return tabType;
   }
-
-  console.log(
-    `Используется тип вкладки рабочего пространства по умолчанию: ${WORKSPACE_TABS.MY}`
-  );
   return WORKSPACE_TABS.MY;
 }
 
@@ -95,15 +86,8 @@ function getWorkspaceDetailTabFromUrl() {
     const tabType =
       urlParams.get("workspace_detail_tab") ||
       WorkspaceManager.WORKSPACE_DETAIL_TABS.OVERVIEW;
-    console.log(
-      `Получен тип вкладки детального просмотра рабочего пространства из URL: ${tabType}`
-    );
     return tabType;
   }
-
-  console.log(
-    `Используется тип вкладки детального просмотра по умолчанию: ${WorkspaceManager.WORKSPACE_DETAIL_TABS.OVERVIEW}`
-  );
   return WorkspaceManager.WORKSPACE_DETAIL_TABS.OVERVIEW;
 }
 
@@ -111,7 +95,6 @@ function setupDashboardHashChangeListener() {
   window.removeEventListener("hashchange", handleDashboardHashChange);
 
   window.addEventListener("hashchange", handleDashboardHashChange);
-  console.log("Обработчик изменения хэша установлен для дашборда");
 }
 
 let currentDisplayedBoardId = null;
@@ -129,19 +112,8 @@ function debugBoardCache(boardId) {
     localStorage.getItem("kanban_boards_cache") || "[]"
   );
   const cachedBoard = localStorageCache.find((b) => b.id == boardId);
-
-  console.log(
-    "Количество досок в кэше localStorage:",
-    localStorageCache.length
-  );
   if (cachedBoard) {
-    console.log("Доска в кэше localStorage:", {
-      id: cachedBoard.id,
-      name: cachedBoard.name,
-      hasUnsavedChanges: !!cachedBoard._hasUnsavedChanges,
-    });
   } else {
-    console.log("Доска НЕ найдена в кэше localStorage");
   }
 
   console.groupEnd();
@@ -165,8 +137,6 @@ async function refreshDashboardSidebar() {
     console.error('Контейнер сайдбара "sidebarPlaceholder" не найден.');
     return;
   }
-
-  console.log("[DASHBOARD] Обновление сайдбара...");
 
   const currentHash = window.location.hash.substring(1);
   const urlParams = new URLSearchParams(
@@ -202,26 +172,16 @@ async function refreshDashboardSidebar() {
       window.location.hash = newHash;
     }
   );
-  console.log("[DASHBOARD] Сайдбар обновлен и обработчики установлены.");
 }
 
 async function handleDashboardHashChange() {
   const hash = window.location.hash.substring(1);
   if (hash.startsWith("/dashboard")) {
-    console.log("Обработчик hashchange: обновление содержимого дашборда");
     const boardId = getBoardIdFromUrl();
     const chatId = getChatIdFromUrl();
     const workspaceTab = getWorkspaceTabFromUrl();
     const workspaceId = getWorkspaceIdFromUrl();
     const workspaceDetailTab = getWorkspaceDetailTabFromUrl();
-
-    console.log("Текущие параметры URL:", {
-      boardId,
-      chatId,
-      workspaceTab,
-      workspaceId,
-      workspaceDetailTab,
-    });
 
     currentWorkspaceTab = workspaceTab;
 
@@ -239,25 +199,16 @@ async function handleDashboardHashChange() {
       currentDisplayedChatId && boardId && !chatId;
 
     if (transitionFromBoardToWorkspace || transitionFromBoardToChat) {
-      console.log(
-        `Переход с доски ${currentDisplayedBoardId} в рабочее пространство/чат`
-      );
       cleanupBoardEventListeners();
       currentDisplayedBoardId = null;
     }
 
     if (transitionFromChatToWorkspace || transitionFromChatToBoard) {
-      console.log(
-        `Переход с чата ${currentDisplayedChatId} в рабочее пространство/доску`
-      );
       cleanupChatPage();
       currentDisplayedChatId = null;
     }
 
     if (workspaceId !== lastWorkspaceId) {
-      console.log(
-        `Изменено рабочее пространство с ${lastWorkspaceId} на ${workspaceId}`
-      );
       lastWorkspaceId = workspaceId;
     }
 
@@ -267,14 +218,6 @@ async function handleDashboardHashChange() {
         (currentDisplayedBoardId !== boardId ||
           transitionToDifferentBoard ||
           transitionFromChatToBoard);
-      console.log(
-        "Нужно ли загружать доску:",
-        shouldLoadBoard,
-        "текущая доска:",
-        currentDisplayedBoardId,
-        "новая доска:",
-        boardId
-      );
 
       const shouldLoadChat =
         chatId &&
@@ -282,17 +225,8 @@ async function handleDashboardHashChange() {
         (currentDisplayedChatId !== chatId ||
           transitionToDifferentChat ||
           transitionFromBoardToChat);
-      console.log(
-        "Нужно ли загружать чат:",
-        shouldLoadChat,
-        "текущий чат:",
-        currentDisplayedChatId,
-        "новый чат:",
-        chatId
-      );
 
       if (shouldLoadBoard) {
-        console.log(`Переход на доску ${boardId}`);
         if (currentDisplayedChatId) {
           cleanupChatPage();
           currentDisplayedChatId = null;
@@ -302,7 +236,6 @@ async function handleDashboardHashChange() {
       }
 
       if (shouldLoadChat) {
-        console.log(`Переход на чат ${chatId} в пространстве ${workspaceId}`);
         if (currentDisplayedBoardId) {
           cleanupBoardEventListeners();
           currentDisplayedBoardId = null;
@@ -323,9 +256,6 @@ async function handleDashboardHashChange() {
           const cachedBoard = localStorageCache.find((b) => b.id == boardId);
 
           if (cachedBoard && cachedBoard._hasUnsavedChanges) {
-            console.log(
-              `Найдена доска с ID ${boardId} в кэше localStorage с несохраненными изменениями`
-            );
             boardDataFromCache = cachedBoard;
           }
         }
@@ -334,10 +264,8 @@ async function handleDashboardHashChange() {
       const promises = [renderDashboardSidebar(boardId || chatId, workspaceId)];
 
       if (shouldLoadBoard && boardId && !boardDataFromCache) {
-        console.log("Добавляем запрос на загрузку доски с сервера:", boardId);
         promises.push(kanbanService.getBoard(boardId));
       } else {
-        console.log("Доску загружать не нужно, пропускаем запрос к API");
         promises.push(null);
       }
 
@@ -354,10 +282,6 @@ async function handleDashboardHashChange() {
 
       setupSidebarEventListeners(
         (selectedBoardId) => {
-          console.log(
-            "Выбрана доска с ID (из обработчика изменения хэша):",
-            selectedBoardId
-          );
 
           let dashboardPath;
 
@@ -367,55 +291,34 @@ async function handleDashboardHashChange() {
             dashboardPath = `/dashboard?board=${selectedBoardId}&workspace_tab=${currentWorkspaceTab}`;
           }
 
-          console.log("Перенаправляем на:", dashboardPath);
-
           window.location.hash = dashboardPath;
         },
 
         (tabType) => {
-          console.log("Выбрана вкладка рабочих пространств:", tabType);
 
           const dashboardPath = `/dashboard?workspace_tab=${tabType}`;
-
-          console.log("Перенаправляем на:", dashboardPath);
 
           window.location.hash = dashboardPath;
         },
 
         (selectedWorkspaceId) => {
-          console.log(
-            "Выбрано рабочее пространство с ID:",
-            selectedWorkspaceId
-          );
 
           const dashboardPath = `/dashboard?workspace=${selectedWorkspaceId}&workspace_tab=${currentWorkspaceTab}`;
 
           if (workspaceId === selectedWorkspaceId) {
-            console.log(
-              "Уже находимся в выбранном рабочем пространстве, не обновляем URL"
-            );
             return;
           }
-
-          console.log("Перенаправляем на:", dashboardPath);
 
           window.location.hash = dashboardPath;
         },
 
         (selectedChatId, selectedWorkspaceId) => {
-          console.log(
-            "Выбран чат с ID (из обработчика изменения хэша):",
-            selectedChatId,
-            "в пространстве:",
-            selectedWorkspaceId
-          );
           let dashboardPath;
           if (selectedWorkspaceId) {
             dashboardPath = `/dashboard?chat=${selectedChatId}&workspace=${selectedWorkspaceId}&workspace_tab=${currentWorkspaceTab}`;
           } else {
             dashboardPath = `/dashboard?chat=${selectedChatId}&workspace_tab=${currentWorkspaceTab}`;
           }
-          console.log("Перенаправляем на:", dashboardPath);
           window.location.hash = dashboardPath;
         }
       );
@@ -429,7 +332,6 @@ async function handleDashboardHashChange() {
             const workspace = await workspaceService.getWorkspace(workspaceId);
             if (workspace) {
               userRole = workspace.role;
-              console.log(`Получена роль пользователя для доски: ${userRole}`);
             }
           } catch (error) {
             console.error("Ошибка при получении роли пользователя:", error);
@@ -442,9 +344,6 @@ async function handleDashboardHashChange() {
         setupBoardEventListeners(
           boardId,
           () => {
-            console.log(
-              "Доска удалена (из обработчика изменения хэша), перенаправляем на дашборд без параметров"
-            );
 
             currentDisplayedBoardId = null;
             window.location.hash = "/dashboard";
@@ -452,13 +351,6 @@ async function handleDashboardHashChange() {
           userRole
         );
       } else if (chatId && workspaceId && shouldLoadChat) {
-        console.log(
-          `Отображение чата ${chatId} в рабочем пространстве ${workspaceId}`
-        );
-        console.log(
-          "Токен в dashboard.js ПЕРЕД renderChatPage:",
-          localStorage.getItem("auth_token")
-        );
 
         if (currentDisplayedBoardId) {
           cleanupBoardEventListeners();
@@ -468,7 +360,6 @@ async function handleDashboardHashChange() {
         await renderChatPage(chatId, workspaceId);
       } else if (workspaceId) {
         try {
-          console.log(`Загрузка рабочего пространства ${workspaceId}...`);
 
           if (
             !workspaceId ||
@@ -620,10 +511,6 @@ export async function renderDashboardPage() {
 }
 
 async function handleSidebarRefreshEvent(event) {
-  console.log(
-    "[DASHBOARD] Получено событие sidebarShouldRefresh:",
-    event.detail
-  );
 
   await refreshDashboardSidebar();
 

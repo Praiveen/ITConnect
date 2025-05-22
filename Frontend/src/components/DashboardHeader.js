@@ -130,7 +130,6 @@ function updateNotificationBadge(notifications) {
       }
     }
   } catch (error) {
-    console.error("Ошибка при обновлении счетчика уведомлений:", error);
   }
 }
 
@@ -210,7 +209,6 @@ async function loadNotifications() {
                   }
                 }
               } catch (error) {
-                console.error("Ошибка при принятии приглашения:", error);
                 button.disabled = false;
                 button.innerHTML = '<i class="fas fa-check"></i> Принять';
                 alert(
@@ -254,7 +252,6 @@ async function loadNotifications() {
                   }
                 }
               } catch (error) {
-                console.error("Ошибка при отклонении приглашения:", error);
                 alert(
                   "Произошла ошибка при отклонении приглашения. Пожалуйста, попробуйте снова."
                 );
@@ -269,7 +266,6 @@ async function loadNotifications() {
 
     updateNotificationBadge(notifications);
   } catch (error) {
-    console.error("Ошибка при загрузке уведомлений:", error);
   }
 }
 
@@ -362,7 +358,6 @@ function setupInvitationButtons() {
           }
         }
       } catch (error) {
-        console.error("Ошибка при принятии приглашения:", error);
         button.disabled = false;
         button.innerHTML = '<i class="fas fa-check"></i> Принять';
         alert(
@@ -407,7 +402,6 @@ function setupInvitationButtons() {
           }
         }
       } catch (error) {
-        console.error("Ошибка при отклонении приглашения:", error);
         button.disabled = false;
         button.innerHTML = '<i class="fas fa-times"></i> Отклонить';
         alert(
@@ -457,7 +451,6 @@ export function setupDashboardHeaderEventListeners() {
           await authService.logout();
           navigateTo("/");
         } catch (error) {
-          console.error("Ошибка при выходе:", error);
         }
       });
     }
@@ -506,10 +499,6 @@ export function setupDashboardHeaderEventListeners() {
 
           updateNotificationBadge([]);
         } catch (error) {
-          console.error(
-            "Ошибка при отметке всех уведомлений как прочитанных:",
-            error
-          );
         }
       });
     }
@@ -523,6 +512,5 @@ async function initNotifications() {
     const notifications = await notificationService.getUnreadNotifications();
     updateNotificationBadge(notifications);
   } catch (error) {
-    console.error("Ошибка при инициализации уведомлений:", error);
   }
 }

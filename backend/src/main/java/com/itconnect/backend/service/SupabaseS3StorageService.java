@@ -11,6 +11,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import org.springframework.core.io.InputStreamResource;
+import java.io.InputStream;
 
 import java.net.URI;
 import java.time.Duration;
@@ -90,5 +92,37 @@ public class SupabaseS3StorageService {
                 .build();
 
         return presigner.presignGetObject(presignRequest).url().toString();
+    }
+
+    /**
+     * Скачивание файла из Supabase S3 по публичной ссылке или ключу.
+     * @param fileUrl - публичная ссылка, сохранённая в БД (attachmentUrl)
+     * @return InputStreamResource для отдачи клиенту
+     */
+    public InputStreamResource downloadFileAsResource(String fileUrl) throws Exception {
+
+        String prefix = "/storage/v1/object/public/" + bucketName + "/";
+        int idx = fileUrl.indexOf(prefix);
+        if (idx == -1) {
+            throw new IllegalArgumentException("Некорректная ссылка на файл");
+        }
+        String key = fileUrl.substring(idx + prefix.length());
+
+        AwsBasicCredentials creds = AwsBasicCredentials.create(accessKey, secretKey);
+
+        S3Client s3 = S3Client.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(creds))
+                .forcePathStyle(true)
+                .build();
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+
+        InputStream inputStream = s3.getObject(getObjectRequest);
+        return new InputStreamResource(inputStream);
     }
 } 

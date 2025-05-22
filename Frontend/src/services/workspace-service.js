@@ -33,7 +33,6 @@ class WorkspaceService {
 
       const text = await response.text();
       if (!text) {
-        console.log("Сервер вернул пустой ответ");
         return [];
       }
 
@@ -41,7 +40,6 @@ class WorkspaceService {
         return JSON.parse(text);
       } catch (e) {
         console.error("Ошибка при разборе JSON:", e);
-        console.log("Полученный ответ:", text);
         return [];
       }
     } catch (error) {
@@ -60,7 +58,6 @@ class WorkspaceService {
     }
 
     try {
-      console.log(`Запрос данных рабочего пространства ${workspaceId}...`);
       const response = await fetch(getApiUrl(`/workspaces/${workspaceId}`), {
         method: "GET",
         credentials: "include",
@@ -79,9 +76,6 @@ class WorkspaceService {
 
       const text = await response.text();
       if (!text) {
-        console.log(
-          `Сервер вернул пустой ответ для рабочего пространства ${workspaceId}`
-        );
         return null;
       }
 
@@ -89,7 +83,6 @@ class WorkspaceService {
         return JSON.parse(text);
       } catch (e) {
         console.error("Ошибка при разборе JSON:", e);
-        console.log("Полученный ответ:", text);
         return null;
       }
     } catch (error) {
@@ -202,10 +195,6 @@ class WorkspaceService {
 
       return await response.json();
     } catch (error) {
-      console.error(
-        `Ошибка при добавлении участника в рабочее пространство ${workspaceId}:`,
-        error
-      );
       throw error;
     }
   }
@@ -227,10 +216,6 @@ class WorkspaceService {
 
       return await response.json();
     } catch (error) {
-      console.error(
-        `Ошибка при удалении участника из рабочего пространства ${workspaceId}:`,
-        error
-      );
       throw error;
     }
   }

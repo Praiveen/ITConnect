@@ -6,6 +6,11 @@ import com.itconnect.backend.dto.SendMessageRequestDto;
 import com.itconnect.backend.entities.User;
 import com.itconnect.backend.services.ChatService;
 import com.itconnect.backend.service.SupabaseS3StorageService;
+import com.itconnect.backend.dto.ResponseDto;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,9 +20,14 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 import java.security.Principal;
 import java.util.HashMap;
@@ -42,7 +52,6 @@ public class ChatMessageController {
         Principal principal = headerAccessor.getUser();
         if (principal == null) {
             log.warn("Received WebSocket message without authenticated user for chat {}", chatId);
-
             return;
         }
 
@@ -63,25 +72,25 @@ public class ChatMessageController {
                 messagePayload.getContent(), currentUser.getUserId(), messagePayload.getParentMessageId());
 
         try {
-
             ChatMessageDto savedMessageDto = chatService.sendMessage(
                     chatId,
                     messagePayload.getContent(),
                     messagePayload.getParentMessageId(),
-                    currentUser
+                    currentUser,
+                    messagePayload.getAttachmentUrl(),
+                    messagePayload.getAttachmentName(),
+                    messagePayload.getAttachmentType(),
+                    messagePayload.getAttachmentSize()
             );
 
             if (savedMessageDto != null) {
-
                 messagingTemplate.convertAndSend("/topic/chat/" + chatId, savedMessageDto);
                 log.info("Message sent to /topic/chat/{} content: {}", chatId, savedMessageDto.getContent());
             } else {
                 log.warn("Failed to save message or user unauthorized for chat {}, message not broadcasted.", chatId);
-
             }
         } catch (Exception e) {
             log.error("Error processing WebSocket message for chat {}: {}", chatId, e.getMessage(), e);
-
         }
     }
 
@@ -234,8 +243,16 @@ public class ChatMessageController {
         return null;
     }
 
-    @PostMapping("/api/files/upload")
-    public Map<String, Object> uploadFile(@RequestParam("file") MultipartFile file) throws Exception {
+    /**
+     * Эндпоинт для загрузки файлов с клиента (только для авторизованных пользователей).
+     */
+    @PostMapping("/files/upload")
+    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) throws Exception {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ResponseDto("Пользователь не авторизован", false));
+        }
         String url = supabaseS3StorageService.uploadFile(file);
 
         Map<String, Object> result = new HashMap<>();
@@ -243,6 +260,40 @@ public class ChatMessageController {
         result.put("name", file.getOriginalFilename());
         result.put("type", file.getContentType());
         result.put("size", file.getSize());
-        return result;
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Эндпоинт для скачивания файла по messageId (только для авторизованных и имеющих доступ к чату).
+     */
+    @GetMapping("/files/{messageId}/download")
+    public ResponseEntity<?> downloadFile(@PathVariable("messageId") Long messageId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ResponseDto("Пользователь не авторизован", false));
+        }
+        User user = (User) authentication.getPrincipal();
+
+        ChatMessageDto message = chatService.getMessageByIdAndUser(messageId, user);
+        if (message == null || message.getAttachmentUrl() == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ResponseDto("Файл не найден или нет доступа", false));
+        }
+
+        try {
+            InputStreamResource resource = supabaseS3StorageService.downloadFileAsResource(message.getAttachmentUrl());
+
+            String filename = message.getAttachmentName() != null ? message.getAttachmentName() : "file";
+            String contentType = message.getAttachmentType() != null ? message.getAttachmentType() : "application/octet-stream";
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseDto("Ошибка при скачивании файла: " + e.getMessage(), false));
+        }
     }
 }

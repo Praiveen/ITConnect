@@ -147,7 +147,16 @@ public class ChatService {
     }
 
     @Transactional
-    public ChatMessageDto sendMessage(Long chatId, String content, Long parentMessageId, User sender) {
+    public ChatMessageDto sendMessage(
+            Long chatId,
+            String content,
+            Long parentMessageId,
+            User sender,
+            String attachmentUrl,
+            String attachmentName,
+            String attachmentType,
+            Long attachmentSize
+    ) {
         Chat chat = chatRepository.findById(chatId).orElse(null);
         if (chat == null) {
             return null;
@@ -179,13 +188,18 @@ public class ChatService {
                     .orElse(null);
         }
 
-        ChatMessage chatMessage = ChatMessage.builder()
+        ChatMessage.ChatMessageBuilder builder = ChatMessage.builder()
                 .chat(chat)
                 .sender(sender)
                 .content(content)
                 .parentMessage(parentMessage)
                 .sentAt(LocalDateTime.now())
-                .build();
+                .attachmentUrl(attachmentUrl)
+                .attachmentName(attachmentName)
+                .attachmentType(attachmentType)
+                .attachmentSize(attachmentSize);
+
+        ChatMessage chatMessage = builder.build();
 
         ChatMessage savedMessage = chatMessageRepository.save(chatMessage);
 
@@ -385,6 +399,35 @@ public class ChatService {
         return true;
     }
 
+    @Transactional(readOnly = true)
+    public ChatMessageDto getMessageByIdAndUser(Long messageId, User user) {
+        ChatMessage message = chatMessageRepository.findById(messageId).orElse(null);
+        if (message == null) {
+            return null;
+        }
+
+        Chat chat = message.getChat();
+        Workspace workspace = chat.getWorkspace();
+
+        boolean isOwner = workspace.getOwner() != null &&
+                user != null &&
+                workspace.getOwner().getUserId() != null &&
+                user.getUserId() != null &&
+                workspace.getOwner().getUserId().equals(user.getUserId());
+
+        boolean isMember = false;
+        if (!isOwner) {
+            WorkspaceMember member = memberRepository.findByWorkspaceAndUser(workspace, user);
+            isMember = member != null;
+        }
+
+        if (!isOwner && !isMember) {
+            return null;
+        }
+
+        return convertToChatMessageDto(message);
+    }
+
     private ChatMessageDto convertToChatMessageDto(ChatMessage message) {
         ParentMessagePreviewDto parentPreview = null;
         if (message.getParentMessage() != null) {
@@ -426,6 +469,10 @@ public class ChatService {
                 .sentAt(message.getSentAt())
                 .editedAt(message.getEditedAt())
                 .parentMessagePreview(parentPreview)
+                .attachmentUrl(message.getAttachmentUrl())
+                .attachmentName(message.getAttachmentName())
+                .attachmentType(message.getAttachmentType())
+                .attachmentSize(message.getAttachmentSize())
                 .build();
     }
 

@@ -27,7 +27,6 @@ export function setupHeaderEventListeners() {
 
   document.querySelectorAll(".btn-login").forEach((button) => {
     button.addEventListener("click", () => {
-      console.log("Переход на страницу входа");
       import("../pages/auth.js").then((module) => {
         module.renderLoginPage();
       });
@@ -36,7 +35,6 @@ export function setupHeaderEventListeners() {
 
   document.querySelectorAll(".btn-register").forEach((button) => {
     button.addEventListener("click", () => {
-      console.log("Переход на страницу регистрации");
       import("../pages/register.js").then((module) => {
         module.renderRegisterPage();
       });
@@ -45,7 +43,6 @@ export function setupHeaderEventListeners() {
 
   document.querySelectorAll(".btn-profile").forEach((button) => {
     button.addEventListener("click", () => {
-      console.log("Переход в профиль");
       import("../pages/profile.js").then((module) => {
         module.renderProfilePage();
       });
@@ -54,7 +51,6 @@ export function setupHeaderEventListeners() {
 
   document.querySelectorAll(".btn-logout").forEach((button) => {
     button.addEventListener("click", async () => {
-      console.log("Выход из системы");
       try {
         await authService.logout();
 

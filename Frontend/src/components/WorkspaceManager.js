@@ -48,9 +48,6 @@ const workspaceCache = {
     const now = Date.now();
     
     if (cacheEntry && now - cacheTime < this.CACHE_TIMEOUT) {
-      console.log(
-        `Используем кэшированные данные для рабочего пространства ${workspaceId}`
-      );
       return cacheEntry;
     }
     
@@ -60,18 +57,15 @@ const workspaceCache = {
   set(workspaceId, data) {
     this.data[workspaceId] = data;
     this.timestamp[workspaceId] = Date.now();
-    console.log(`Данные рабочего пространства ${workspaceId} сохранены в кэш`);
   },
   
   clear(workspaceId) {
     if (workspaceId) {
       delete this.data[workspaceId];
       delete this.timestamp[workspaceId];
-      console.log(`Кэш для рабочего пространства ${workspaceId} очищен`);
     } else {
       this.data = {};
       this.timestamp = {};
-      console.log("Весь кэш рабочих пространств очищен");
     }
   },
 };
@@ -85,9 +79,7 @@ export async function renderWorkspaceContent(tabType) {
     
     try {
       invitations = (await notificationService.getWorkspaceInvitations()) || [];
-      console.log("Получены приглашения:", invitations.length);
     } catch (invitationError) {
-      console.error("Ошибка при получении приглашений:", invitationError);
       invitations = [];
     }
     
@@ -100,7 +92,6 @@ export async function renderWorkspaceContent(tabType) {
       switch (tabType) {
         case WORKSPACE_TABS.ALL:
           workspaces = (await workspaceService.getAllWorkspaces()) || [];
-          console.log("Получены все рабочие пространства:", workspaces.length);
           contentHtml = `
             <div class="workspace-content">
               <h2>Все рабочие пространства</h2>
@@ -120,14 +111,6 @@ export async function renderWorkspaceContent(tabType) {
           
         case WORKSPACE_TABS.MY:
           workspaces = (await workspaceService.getAllWorkspaces()) || [];
-          console.log(
-            "Получены рабочие пространства для фильтрации:",
-            workspaces.length
-          );
-          console.log(
-            "Данные рабочих пространств (МОИ):",
-            JSON.stringify(workspaces)
-          );
 
           const myWorkspaces = Array.isArray(workspaces)
             ? workspaces.filter((ws) => {
@@ -137,11 +120,6 @@ export async function renderWorkspaceContent(tabType) {
                 );
               })
             : [];
-
-          console.log(
-            "Отфильтрованы мои рабочие пространства:",
-            myWorkspaces.length
-          );
           
           contentHtml = `
             <div class="workspace-content">
@@ -162,14 +140,6 @@ export async function renderWorkspaceContent(tabType) {
           
         case WORKSPACE_TABS.SHARED:
           workspaces = (await workspaceService.getAllWorkspaces()) || [];
-          console.log(
-            "Получены рабочие пространства для фильтрации:",
-            workspaces.length
-          );
-          console.log(
-            "Данные рабочих пространств (СОВМЕСТНЫЕ):",
-            JSON.stringify(workspaces)
-          );
 
           const sharedWorkspaces = Array.isArray(workspaces)
             ? workspaces.filter((ws) => {
@@ -181,11 +151,6 @@ export async function renderWorkspaceContent(tabType) {
                 );
               })
             : [];
-
-          console.log(
-            "Отфильтрованы совместные рабочие пространства:",
-            sharedWorkspaces.length
-          );
           
           contentHtml = `
             <div class="workspace-content">
@@ -351,8 +316,6 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
       try {
         button.disabled = true;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Принятие...';
-        
-        console.log(`Принятие приглашения ${invitationId}...`);
         const success = await acceptInvitation(invitationId);
         
         if (success) {
@@ -399,8 +362,6 @@ export function setupWorkspaceContentEventListeners(navigateCallback) {
         button.disabled = true;
         button.innerHTML =
           '<i class="fas fa-spinner fa-spin"></i> Отклонение...';
-        
-        console.log(`Отклонение приглашения ${invitationId}...`);
         const success = await declineInvitation(invitationId);
         
         if (success) {
@@ -498,10 +459,7 @@ export async function createNewWorkspace() {
         
         showSuccessToast(`Рабочее пространство "${name}" успешно создано`);
 
-        invalidateWorkspacesCache(); 
-
-        
-        console.log("[WorkspaceManager] Генерируется событие sidebarShouldRefresh для рабочего пространства (создание)");
+        invalidateWorkspacesCache();
         document.dispatchEvent(
           new CustomEvent("sidebarShouldRefresh", {
             detail: {
@@ -568,7 +526,6 @@ export async function acceptInvitation(invitationId) {
   }
   
   try {
-    console.log(`Принятие приглашения с ID ${invitationId}...`);
     await notificationService.acceptWorkspaceInvitation(invitationId);
     
     await notificationService.markAsRead(invitationId);
@@ -589,7 +546,6 @@ export async function declineInvitation(invitationId) {
   }
   
   try {
-    console.log(`Отклонение приглашения с ID ${invitationId}...`);
     await notificationService.declineWorkspaceInvitation(invitationId);
     
     await notificationService.markAsRead(invitationId);
@@ -620,7 +576,6 @@ export async function loadWorkspaceMembers(workspaceId) {
   }
   
   try {
-    console.log(`Загрузка участников рабочего пространства ${workspaceId}...`);
     
     membersContainer.innerHTML =
       '<div class="workspace-loading">Загрузка участников...</div>';
@@ -628,9 +583,6 @@ export async function loadWorkspaceMembers(workspaceId) {
     let workspace = workspaceCache.get(workspaceId);
     
     if (!workspace) {
-      console.log(
-        `Данные рабочего пространства ${workspaceId} не найдены в кэше, загружаем с сервера`
-      );
       
       try {
         workspace = await workspaceService.getWorkspace(workspaceId);
@@ -655,8 +607,6 @@ export async function loadWorkspaceMembers(workspaceId) {
       }
     }
     
-    console.log("Полученные данные рабочего пространства:", workspace);
-    
     if (!workspace) {
       console.error(
         `Не удалось загрузить рабочее пространство ${workspaceId}. Возможно, у вас нет доступа.`
@@ -671,19 +621,13 @@ export async function loadWorkspaceMembers(workspaceId) {
     }
     
     const members = workspace.members || [];
-    console.log("Участники рабочего пространства:", members);
     
     if (members.length > 0) {
-      console.log("Первый участник:", members[0]);
-      console.log("Ключи первого участника:", Object.keys(members[0]));
     }
 
     const validMembers = Array.isArray(members)
       ? members.filter((m) => m && typeof m === "object")
       : [];
-    console.log(
-      `Валидных участников: ${validMembers.length} из ${members.length}`
-    );
 
     renderMembers(validMembers, workspace, membersContainer);
     
@@ -721,21 +665,13 @@ export async function loadWorkspaceBoards(workspaceId) {
   }
   
   try {
-    console.log(`Загрузка досок для рабочего пространства ${workspaceId}...`);
     
     boardsContainer.innerHTML =
       '<div class="workspace-loading">Загрузка досок...</div>';
     
     const boards = await getWorkspaceBoards(workspaceId);
-    console.log(
-      `Получено ${
-        boards ? boards.length : 0
-      } досок для рабочего пространства ${workspaceId}:`,
-      boards
-    );
     
     if (!boards || !Array.isArray(boards) || boards.length === 0) {
-      console.log(`Доски не найдены для рабочего пространства ${workspaceId}`);
       boardsContainer.innerHTML = `<div class="workspace-empty">Нет досок в этом рабочем пространстве</div>`;
       return;
     }
@@ -759,16 +695,12 @@ export async function loadWorkspaceBoards(workspaceId) {
 
 export async function getWorkspaceBoards(workspaceId) {
   try {
-    console.log(`Запрос досок для рабочего пространства ${workspaceId}...`);
     
     const kanbanService = await import("../services/kanban-service.js").then(
       (module) => module.kanbanService
     );
     
     const allBoards = await kanbanService.getBoards();
-    console.log(
-      `Получено всего ${allBoards ? allBoards.length : 0} досок пользователя`
-    );
     
     if (!allBoards || !Array.isArray(allBoards)) {
       console.error("Получен некорректный список досок:", allBoards);
@@ -779,10 +711,6 @@ export async function getWorkspaceBoards(workspaceId) {
       if (!board) return false;
       return String(board.workspaceId) === String(workspaceId);
     });
-    
-    console.log(
-      `Отфильтровано ${workspaceBoards.length} досок для рабочего пространства ${workspaceId}`
-    );
     
     return workspaceBoards;
   } catch (error) {
@@ -799,8 +727,6 @@ function renderBoards(boards, container, workspaceId) {
     container.innerHTML = `<div class="workspace-empty">Нет досок в этом рабочем пространстве</div>`;
     return;
   }
-
-  console.log(`Генерируем HTML для ${boards.length} досок в РП ${workspaceId}`);
 
   const boardsHtml = boards
     .map(
@@ -833,10 +759,6 @@ function renderBoards(boards, container, workspaceId) {
     .join("");
   
   container.innerHTML = boardsHtml;
-  
-  console.log(
-    `HTML сгенерирован и добавлен в контейнер, настраиваем обработчики событий для досок`
-  );
 
   document.querySelectorAll(".workspace-board-item").forEach((boardItem) => {
     const boardId = boardItem.getAttribute("data-board-id");
@@ -849,9 +771,6 @@ function renderBoards(boards, container, workspaceId) {
         console.error("ID доски не найден в элементе");
         return;
       }
-      console.log(
-        `Выбрана доска ${boardId} из списка досок рабочего пространства ${currentWorkspaceId}`
-      );
       navigateToBoard(boardId);
     });
 
@@ -873,8 +792,6 @@ function renderBoards(boards, container, workspaceId) {
       });
     }
   });
-  
-  console.log(`Обработчики событий для досок настроены`);
 }
 
 export function navigateToBoard(boardId) {
@@ -887,12 +804,6 @@ export function navigateToBoard(boardId) {
   const currentBoardId = urlParams.get("board");
 
   const reloadParam = currentBoardId === boardId ? `&reload=${Date.now()}` : "";
-
-  console.log(
-    `Переход к доске ${boardId} из рабочего пространства ${
-      workspaceId || "не указано"
-    }`
-  );
 
   if (workspaceId) {
     window.location.hash = `/dashboard?board=${boardId}&workspace=${workspaceId}${reloadParam}`;
@@ -990,36 +901,20 @@ export async function removeMember(workspaceId, userId, userName) {
 }
 
 export function setupWorkspaceDetailEventListeners(workspace) {
-  console.log(
-    `Установка обработчиков событий для рабочего пространства ${workspace.id}`
-  );
   
   const userRole = workspace.role || "";
   const isOwner = workspace.owner === true;
   const isAdmin = userRole === "ADMIN";
   const hasEditRights = isOwner || isAdmin;
-  
-  console.log(
-    `Права пользователя: владелец = ${isOwner}, админ = ${isAdmin}, роль = ${userRole}`
-  );
 
   const editBtns = document.querySelectorAll(".workspace-edit-btn");
   editBtns.forEach((editBtn) => {
   if (editBtn) {
     if (hasEditRights) {
-        console.log(
-          "Найдена кнопка редактирования рабочего пространства - права есть"
-        );
         editBtn.addEventListener("click", () => {
-          console.log(
-            `Нажата кнопка редактирования для рабочего пространства ${workspace.id}`
-          );
         editWorkspace(workspace);
       });
     } else {
-        console.log(
-          "Найдена кнопка редактирования рабочего пространства - прав нет, скрываем"
-        );
         editBtn.style.display = "none";
     }
   }
@@ -1029,11 +924,7 @@ export function setupWorkspaceDetailEventListeners(workspace) {
   inviteBtns.forEach((inviteBtn) => {
   if (inviteBtn) {
     if (hasEditRights) {
-        console.log("Найдена кнопка приглашения пользователя - права есть");
         inviteBtn.addEventListener("click", async () => {
-          console.log(
-            `Нажата кнопка приглашения для рабочего пространства ${workspace.id}`
-          );
           const success = await inviteUserToWorkspace(workspace.id);
           
           if (success) {
@@ -1041,9 +932,6 @@ export function setupWorkspaceDetailEventListeners(workspace) {
           }
       });
     } else {
-        console.log(
-          "Найдена кнопка приглашения пользователя - прав нет, скрываем"
-        );
         inviteBtn.style.display = "none";
     }
   }
@@ -1052,17 +940,10 @@ export function setupWorkspaceDetailEventListeners(workspace) {
   const addBoardBtn = document.querySelector(".workspace-add-board-btn");
   if (addBoardBtn) {
     if (userRole !== "VIEWER") {
-      console.log("Найдена кнопка добавления доски - права есть");
       addBoardBtn.addEventListener("click", () => {
-        console.log(
-          `Нажата кнопка добавления доски для рабочего пространства ${workspace.id}`
-        );
         addBoardToWorkspace(workspace.id);
       });
     } else {
-      console.log(
-        "Найдена кнопка добавления доски - прав нет (наблюдатель), скрываем"
-      );
       addBoardBtn.style.display = "none";
     }
   } else {
@@ -1159,16 +1040,9 @@ export async function editWorkspace(workspace) {
             workspaceDescElem.textContent =
               updatedWorkspace.description || "Нет описания";
           }
-
-          console.log(
-            "Рабочее пространство успешно обновлено без перезагрузки страницы"
-          );
           showSuccessToast("Рабочее пространство успешно обновлено");
 
-          invalidateWorkspacesCache(); 
-
-          
-          console.log("[WorkspaceManager] Генерируется событие sidebarShouldRefresh для рабочего пространства (обновление)");
+          invalidateWorkspacesCache();
           document.dispatchEvent(
             new CustomEvent("sidebarShouldRefresh", {
               detail: {
@@ -1519,14 +1393,10 @@ export async function renderWorkspaceDetail(
   }
 
   try {
-    console.log(`Загрузка рабочего пространства ${workspaceId}...`);
     
     let workspace = workspaceCache.get(workspaceId);
     
     if (!workspace) {
-      console.log(
-        `Данные рабочего пространства ${workspaceId} не найдены в кэше, загружаем с сервера`
-      );
       
       try {
         workspace = await workspaceService.getWorkspace(workspaceId);
@@ -1565,8 +1435,6 @@ export async function renderWorkspaceDetail(
         </div>
       `;
     }
-
-    console.log("Полученные данные рабочего пространства:", workspace);
 
     const tabContent = await renderWorkspaceTabContent(workspace, activeTab);
     
@@ -1759,18 +1627,10 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
     ? activeTabElement.getAttribute("data-tab")
     : WORKSPACE_DETAIL_TABS.OVERVIEW;
 
-  console.log(
-    `Настройка обработчиков для рабочего пространства ${workspaceId}, активная вкладка: ${activeTab}`
-  );
-
   document.querySelectorAll(".workspace-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       const tabType = tab.getAttribute("data-tab");
       if (!tabType) return;
-      
-      console.log(
-        `Выбрана вкладка ${tabType} для рабочего пространства ${workspaceId}`
-      );
       
       const currentHash = window.location.hash.substring(1);
       const urlParams = new URLSearchParams(
@@ -1810,12 +1670,9 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
     });
   }
   
-  console.log(`Загрузка данных для вкладки: ${activeTab}`);
-  
   if (activeTab === WORKSPACE_DETAIL_TABS.MEMBERS) {
     const membersContainer = document.getElementById("workspaceMembers");
     if (membersContainer) {
-      console.log('Загрузка участников для вкладки "Управление участниками"');
       loadWorkspaceMembers(workspaceId);
     } else {
       console.warn("Контейнер участников #workspaceMembers не найден");
@@ -1823,14 +1680,12 @@ export function setupWorkspaceDetailTabsEventListeners(workspaceId) {
   } else if (activeTab === WORKSPACE_DETAIL_TABS.OVERVIEW) {
     const boardsContainer = document.getElementById("workspaceBoards");
     if (boardsContainer) {
-      console.log('Загрузка досок для вкладки "Обзор"');
       loadWorkspaceBoards(workspaceId);
     } else {
       console.warn("Контейнер досок #workspaceBoards не найден");
     }
     const chatsContainer = document.getElementById("workspaceChats");
     if (chatsContainer) {
-      console.log('Загрузка чатов для вкладки "Обзор"');
       loadWorkspaceChats(workspaceId);
     } else {
       console.warn("Контейнер чатов #workspaceChats не найден");
@@ -1921,7 +1776,6 @@ export async function deleteWorkspace(workspace) {
         invalidateWorkspacesCache(); 
         
         // Генерируем событие для обновления сайдбара
-        console.log("[WorkspaceManager] Генерируется событие sidebarShouldRefresh для рабочего пространства (удаление)");
         document.dispatchEvent(
           new CustomEvent("sidebarShouldRefresh", {
             detail: {
@@ -1992,8 +1846,6 @@ function renderMembers(members, workspace, container) {
     container.innerHTML = `<div class="workspace-empty">Нет участников</div>`;
     return;
   }
-  
-  console.log("Отображение участников:", members);
   
   const membersHtml = `
     <div class="members-filter-container">
@@ -2274,18 +2126,10 @@ export async function loadWorkspaceChats(workspaceId) {
   }
 
   try {
-    console.log(`Загрузка чатов для рабочего пространства ${workspaceId}...`);
     chatsContainer.innerHTML =
       '<div class="workspace-loading">Загрузка чатов...</div>';
     
-    const chats = await workspaceService.getWorkspaceChats(workspaceId); 
-
-    console.log(
-      `Получено ${
-        chats ? chats.length : 0
-      } чатов для рабочего пространства ${workspaceId}:`,
-      chats
-    );
+    const chats = await workspaceService.getWorkspaceChats(workspaceId);
 
     renderChats(chats, chatsContainer, workspaceId);
   } catch (error) {
@@ -2309,8 +2153,6 @@ function renderChats(chats, container, workspaceId) {
     container.innerHTML = `<div class="workspace-empty">Нет чатов в этом рабочем пространстве</div>`;
     return;
   }
-
-  console.log(`Генерируем HTML для ${chats.length} чатов в РП ${workspaceId}`);
 
   const chatsHtml = chats
     .map(
@@ -2357,7 +2199,6 @@ function renderChats(chats, container, workspaceId) {
         console.error("ID чата не найден в элементе");
         return;
       }
-      console.log(`Выбран чат ${chatId}`);
       navigateToChat(chatId, currentWorkspaceId);
     });
 
@@ -2519,21 +2360,12 @@ export function navigateToChat(chatId, workspaceId) {
     const currentWorkspaceId = currentHashParams.get("workspace");
     if (currentWorkspaceId) {
       workspaceId = currentWorkspaceId;
-      console.log(
-        `Используется workspaceId ${workspaceId} из текущего URL для чата ${chatId}`
-      );
     } else {
       console.error(
         `Не удалось определить workspaceId для чата ${chatId}. Навигация может быть неполной.`
       );
     }
   }
-
-  console.log(
-    `Переход к чату ${chatId} в рабочем пространстве ${
-      workspaceId || "не указано"
-    }`
-  );
   
   const params = new URLSearchParams();
   if (workspaceId) params.set("workspace", workspaceId);
@@ -2610,10 +2442,6 @@ async function handleEditBoardClick(boardId, currentName, workspaceId) {
 
         await loadWorkspaceBoards(workspaceId);
         closeModal();
-
-        console.log(
-          "[WorkspaceManager] Генерируется событие sidebarShouldRefresh для доски"
-        );
         document.dispatchEvent(
           new CustomEvent("sidebarShouldRefresh", {
             detail: {
@@ -2755,10 +2583,6 @@ async function handleEditChatClick(
 
         await loadWorkspaceChats(workspaceId);
         closeModal();
-
-        console.log(
-          "[WorkspaceManager] Генерируется событие sidebarShouldRefresh для чата"
-        );
         document.dispatchEvent(
           new CustomEvent("sidebarShouldRefresh", {
             detail: {

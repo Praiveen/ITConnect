@@ -44,19 +44,14 @@ async function getMentionableUsers(query) {
     currentBoardData.members.length > 0
   ) {
     resolvedBoardMembers = currentBoardData.members;
-    console.log("Mentions: Using members from currentBoardData.members");
   } else if (currentBoardData && currentBoardData.workspaceId) {
     if (
       currentBoardData.workspaceId === currentWorkspaceIdForCache &&
       workspaceMembersCache
     ) {
       resolvedBoardMembers = workspaceMembersCache;
-      console.log("Mentions: Using component-level cached workspace members");
     } else {
       try {
-        console.log(
-          `Mentions: Fetching members for workspace ${currentBoardData.workspaceId}`
-        );
         const workspace = await workspaceService.getWorkspace(
           currentBoardData.workspaceId
         );
@@ -72,29 +67,18 @@ async function getMentionableUsers(query) {
 
           workspaceMembersCache = resolvedBoardMembers;
           currentWorkspaceIdForCache = currentBoardData.workspaceId;
-          console.log(
-            "Mentions: Fetched and mapped workspace members:",
-            resolvedBoardMembers
-          );
         } else {
-          console.warn(
-            `Mentions: No members found for workspace ${currentBoardData.workspaceId} or workspace data is missing.`
-          );
           workspaceMembersCache = [];
           currentWorkspaceIdForCache = currentBoardData.workspaceId;
           resolvedBoardMembers = [];
         }
       } catch (error) {
-        console.error("Mentions: Error fetching workspace members:", error);
         workspaceMembersCache = [];
         currentWorkspaceIdForCache = currentBoardData.workspaceId;
         resolvedBoardMembers = [];
       }
     }
   } else {
-    console.warn(
-      "Mentions: workspaceId not found in currentBoardData or currentBoardData is missing. No users to suggest."
-    );
     resolvedBoardMembers = [];
   }
 
@@ -183,10 +167,6 @@ function insertMention(username, textarea) {
 function handleMentionTextareaInput(event) {
   const textarea = event.target;
 
-  console.log(
-    `Mentions: Input event on textarea (className: ${textarea.className}, placeholder: "${textarea.placeholder}")`
-  );
-
   const text = textarea.value;
   const cursorPos = textarea.selectionStart;
 
@@ -203,27 +183,18 @@ function handleMentionTextareaInput(event) {
       break;
     }
   }
-  console.log(`Mentions: Calculated atIndex: ${atIndex}`);
 
   if (atIndex !== -1) {
     const queryPart = text.substring(atIndex + 1, cursorPos);
-    console.log(`Mentions: Calculated queryPart: "${queryPart}"`);
 
     if (queryPart.includes(" ")) {
-      console.log("Mentions: queryPart contains space. Hiding dropdown.");
       hideMentionsDropdown();
       return;
     }
     mentionQuery = queryPart;
     mentionStartIndex = atIndex;
-    console.log(
-      `Mentions: Attempting to show dropdown for query "${mentionQuery}" on textarea (className: ${textarea.className})`
-    );
     showMentionsDropdown(mentionQuery, textarea);
   } else {
-    console.log(
-      "Mentions: '@' not found or not at a valid start position. Hiding dropdown."
-    );
     hideMentionsDropdown();
   }
 }
@@ -392,31 +363,16 @@ export async function renderKanbanBoard(
 
   const currentUser = authService.getUser();
   const currentUserIdString = currentUser ? String(currentUser.id) : null;
-
-  console.log(
-    "Рендеринг канбан-доски с ID:",
-    boardId,
-    "Роль пользователя:",
-    userRole,
-    "Текущий UserId:",
-    currentUserIdString
-  );
   if (preloadedBoardData) {
-    console.log(
-      "Используем предзагруженные данные для доски:",
-      preloadedBoardData.id
-    );
   }
 
   const isViewOnly = userRole === "VIEWER";
-  console.log("Режим только для просмотра:", isViewOnly);
 
   if (!board) {
     const boardsMemoryCache = getBoardsCache();
     if (boardsMemoryCache) {
       const cachedBoard = boardsMemoryCache.find((b) => b.id == boardId);
       if (cachedBoard) {
-        console.log(`Найдена доска с ID ${boardId} в кэше памяти`);
         board = cachedBoard;
       }
     }
@@ -427,24 +383,18 @@ export async function renderKanbanBoard(
       );
       const cachedBoard = localStorageCache.find((b) => b.id == boardId);
       if (cachedBoard) {
-        console.log(`Найдена доска с ID ${boardId} в localStorage`);
         board = cachedBoard;
       }
     }
 
     if (!board || !board._hasUnsavedChanges) {
       try {
-        console.log(`Загрузка данных доски с ID ${boardId} с сервера...`);
 
         const serverBoard = await kanbanService.getBoard(boardId);
 
         if (board && board._hasUnsavedChanges) {
-          console.log(
-            "Обнаружены несохраненные изменения, используем кэшированную версию"
-          );
         } else {
           board = serverBoard;
-          console.log("Используем данные с сервера");
 
           const boardsCache = getBoardsCache();
           if (boardsCache) {
@@ -455,7 +405,6 @@ export async function renderKanbanBoard(
               boardsCache.push({ ...board });
             }
             updateBoardsCache(boardsCache);
-            console.log("Обновлен кэш в памяти после загрузки с сервера");
           }
 
           const localStorageCache = JSON.parse(
@@ -473,13 +422,11 @@ export async function renderKanbanBoard(
             "kanban_boards_cache",
             JSON.stringify(localStorageCache)
           );
-          console.log("Обновлен кэш в localStorage после загрузки с сервера");
         }
       } catch (error) {
         console.error(`Ошибка при загрузке доски с ID ${boardId}:`, error);
 
         if (board) {
-          console.log("Используем кэшированные данные из-за ошибки сервера");
         } else {
           return `
             <div class="board-container">
@@ -494,12 +441,8 @@ export async function renderKanbanBoard(
         }
       }
     } else {
-      console.log(
-        `Используем кэшированные данные для доски с ID ${boardId} с несохраненными изменениями`
-      );
     }
   } else {
-    console.log(`Используем предзагруженные данные для доски с ID ${boardId}`);
   }
 
   if (!board) {
@@ -534,7 +477,6 @@ export async function renderKanbanBoard(
     const parsedData = JSON.parse(board.boardData);
     boardColumnsData = parsedData.columns || [];
   } catch (error) {
-    console.error("Ошибка при парсинге данных доски:", error);
     boardColumnsData = [];
   }
 
@@ -734,15 +676,8 @@ export function setupBoardEventListeners(
   userRole = null
 ) {
   const isViewOnly = userRole === "VIEWER";
-  console.log(
-    "Настройка обработчиков канбан-доски, режим только для просмотра:",
-    isViewOnly
-  );
 
   if (isViewOnly) {
-    console.log(
-      "Пользователь является наблюдателем, функционал редактирования отключен"
-    );
 
     const board = document.getElementById("kanbanBoard");
     if (board) {
@@ -1165,7 +1100,6 @@ function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
     );
 
     if (sourceColumnIndex === -1 || targetColumnIndex === -1) {
-      console.error("Не удалось найти исходную или целевую колонку");
       return;
     }
 
@@ -1173,7 +1107,6 @@ function moveCardBetweenColumns(taskId, sourceColumnId, targetColumnId) {
       (task) => task.id === taskId
     );
     if (taskIndex === -1) {
-      console.error("Не удалось найти задачу в исходной колонке");
       return;
     }
 
@@ -1245,10 +1178,7 @@ function updateCardOrderInColumn(columnId) {
     boardData.columns[columnIndex].tasks = newTasks;
 
     updateBoardData(boardData);
-
-    console.log("Порядок карточек обновлен в колонке:", columnId);
   } catch (error) {
-    console.error("Ошибка при обновлении порядка карточек:", error);
   }
 }
 
@@ -1273,7 +1203,6 @@ async function editBoard(boardId) {
 
     window.location.reload();
   } catch (error) {
-    console.error(`Ошибка при редактировании доски с ID ${boardId}:`, error);
     alert(
       "Не удалось обновить доску: " + (error.message || "Неизвестная ошибка")
     );
@@ -1297,7 +1226,6 @@ async function deleteBoard(boardId, onBoardDeleted) {
   if (!confirmed) return;
 
   try {
-    console.log("Удаление доски с ID:", boardId);
 
     await kanbanService.deleteBoard(boardId);
 
@@ -1306,10 +1234,6 @@ async function deleteBoard(boardId, onBoardDeleted) {
     );
     const updatedCache = cachedBoards.filter((board) => board.id != boardId);
     localStorage.setItem("kanban_boards_cache", JSON.stringify(updatedCache));
-    console.log(
-      "Кэш досок в localStorage обновлен после удаления, осталось досок:",
-      updatedCache.length
-    );
 
     const currentCache = getBoardsCache();
     if (currentCache) {
@@ -1317,19 +1241,15 @@ async function deleteBoard(boardId, onBoardDeleted) {
         (board) => board.id != boardId
       );
       updateBoardsCache(updatedMemoryCache);
-      console.log("Кэш досок в памяти обновлен после удаления");
     }
 
     if (typeof onBoardDeleted === "function") {
-      console.log("Вызываем коллбэк после удаления доски");
       onBoardDeleted();
     } else {
-      console.log("Коллбэк не предоставлен, перенаправляем на дашборд вручную");
 
       window.location.hash = "/dashboard";
     }
   } catch (error) {
-    console.error(`Ошибка при удалении доски с ID ${boardId}:`, error);
     alert(
       "Не удалось удалить доску: " + (error.message || "Неизвестная ошибка")
     );
@@ -1518,7 +1438,6 @@ function finishEditColumnTitle(inputElement, titleContainer, columnId) {
         (column) => column.id === columnId
       );
       if (columnIndex === -1) {
-        console.error("Колонка не найдена");
 
         const defaultValue = inputElement.defaultValue || "Колонка";
         restoreColumnTitle(titleContainer, columnId, defaultValue);
@@ -1538,7 +1457,6 @@ function finishEditColumnTitle(inputElement, titleContainer, columnId) {
 
       restoreColumnTitle(titleContainer, columnId, newName);
     } catch (error) {
-      console.error("Ошибка при редактировании колонки:", error);
       alert("Не удалось отредактировать колонку: " + error.message);
 
       const boardData = JSON.parse(currentBoardData.boardData);
@@ -2058,8 +1976,6 @@ function updateBoardData(boardData) {
 
     currentBoardData._hasUnsavedChanges = true;
 
-    console.log("Обновление данных доски:", currentBoardData.id);
-
     const boardsCache = getBoardsCache();
     if (boardsCache) {
       const boardIndex = boardsCache.findIndex(
@@ -2071,7 +1987,6 @@ function updateBoardData(boardData) {
 
         boardsCache[boardIndex] = updatedBoard;
         updateBoardsCache(boardsCache);
-        console.log("Кэш в памяти обновлен, индекс доски:", boardIndex);
       } else {
         console.warn("Доска не найдена в кэше памяти:", currentBoardData.id);
       }
@@ -2096,7 +2011,6 @@ function updateBoardData(boardData) {
         "kanban_boards_cache",
         JSON.stringify(localStorageCache)
       );
-      console.log("Кэш в localStorage обновлен, индекс доски:", boardIndex);
 
       const afterUpdateCache = JSON.parse(
         localStorage.getItem("kanban_boards_cache") || "[]"
@@ -2105,19 +2019,12 @@ function updateBoardData(boardData) {
         (b) => b.id == currentBoardData.id
       );
       if (afterUpdateBoard && afterUpdateBoard._hasUnsavedChanges) {
-        console.log(
-          "Проверка успешна: флаг несохраненных изменений установлен в кэше localStorage"
-        );
       } else if (afterUpdateBoard && afterUpdateBoard._hasUnsavedChanges) {
         console.error(
           "Ошибка: флаг несохраненных изменений остался в кэше после сохранения"
         );
       }
     } else {
-      console.warn(
-        "Доска не найдена в кэше localStorage:",
-        currentBoardData.id
-      );
 
       const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
       updatedBoard._hasUnsavedChanges = true;
@@ -2127,7 +2034,6 @@ function updateBoardData(boardData) {
         "kanban_boards_cache",
         JSON.stringify(localStorageCache)
       );
-      console.log("Доска добавлена в кэш localStorage");
     }
 
     if (saveTimer) {
@@ -2162,15 +2068,11 @@ async function saveBoardData() {
       boardData: currentBoardData.boardData,
     };
 
-    console.log("Сохранение доски на сервере:", currentBoardData.id);
-
     await kanbanService.updateBoard(currentBoardData.id, updateData);
 
     delete currentBoardData._hasUnsavedChanges;
 
     boardChanged = false;
-
-    console.log("Доска успешно сохранена на сервере, обновляем кэши");
 
     const boardsCache = getBoardsCache();
     if (boardsCache) {
@@ -2181,7 +2083,6 @@ async function saveBoardData() {
         const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
         boardsCache[boardIndex] = updatedBoard;
         updateBoardsCache(boardsCache);
-        console.log("Кэш в памяти обновлен после сохранения");
       }
     }
 
@@ -2198,16 +2099,12 @@ async function saveBoardData() {
         "kanban_boards_cache",
         JSON.stringify(localStorageCache)
       );
-      console.log("Кэш в localStorage обновлен после сохранения");
 
       const checkCache = JSON.parse(
         localStorage.getItem("kanban_boards_cache") || "[]"
       );
       const checkBoard = checkCache.find((b) => b.id == currentBoardData.id);
       if (checkBoard && !checkBoard._hasUnsavedChanges) {
-        console.log(
-          "Проверка успешна: флаг несохраненных изменений удален из кэша localStorage"
-        );
       } else if (checkBoard && checkBoard._hasUnsavedChanges) {
         console.error(
           "Ошибка: флаг несохраненных изменений остался в кэше после сохранения"
@@ -2225,7 +2122,6 @@ async function saveBoardData() {
         "kanban_boards_cache",
         JSON.stringify(localStorageCache)
       );
-      console.log("Доска добавлена в кэш localStorage");
     }
 
     if (saveStatus) {
@@ -2233,8 +2129,6 @@ async function saveBoardData() {
       saveStatus.classList.remove("saving");
       saveStatus.classList.remove("unsaved");
     }
-
-    console.log("Доска успешно сохранена");
   } catch (error) {
     console.error("Ошибка при сохранении доски:", error);
 
@@ -2254,8 +2148,6 @@ function forceSaveBoardData() {
       boardData: currentBoardData.boardData,
     };
 
-    console.log("Принудительное сохранение доски:", currentBoardData.id);
-
     try {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", `/api/boards/${currentBoardData.id}`, false);
@@ -2266,8 +2158,6 @@ function forceSaveBoardData() {
         delete currentBoardData._hasUnsavedChanges;
         boardChanged = false;
 
-        console.log("Доска принудительно сохранена, обновляем кэши");
-
         const boardsCache = getBoardsCache();
         if (boardsCache) {
           const boardIndex = boardsCache.findIndex(
@@ -2277,9 +2167,6 @@ function forceSaveBoardData() {
             const updatedBoard = JSON.parse(JSON.stringify(currentBoardData));
             boardsCache[boardIndex] = updatedBoard;
             updateBoardsCache(boardsCache);
-            console.log(
-              "Кэш в памяти обновлен после принудительного сохранения"
-            );
           }
         }
 
@@ -2296,12 +2183,7 @@ function forceSaveBoardData() {
             "kanban_boards_cache",
             JSON.stringify(localStorageCache)
           );
-          console.log(
-            "Кэш в localStorage обновлен после принудительного сохранения"
-          );
         }
-
-        console.log("Доска принудительно сохранена перед выходом");
       } else {
         console.error("Ошибка при принудительном сохранении доски");
       }
@@ -2328,8 +2210,6 @@ export function cleanupBoardEventListeners() {
 
   boardChanged = false;
   currentBoardData = null;
-
-  console.log("Очистка слушателей событий доски выполнена");
 }
 
 function setupColumnDragAndDrop() {
@@ -2542,8 +2422,6 @@ function updateColumnsOrder() {
     boardData.columns = newColumns;
 
     updateBoardData(boardData);
-
-    console.log("Порядок колонок обновлен");
   } catch (error) {
     console.error("Ошибка при обновлении порядка колонок:", error);
   }
@@ -2892,8 +2770,6 @@ function openCardDetailModal(taskId, options = {}) {
     });
 
     const currentUser = JSON.parse(localStorage.getItem("auth_user") || "{}");
-
-    console.log(currentUser);
     const currentUsername =
       currentUser.fullname ||
       (
@@ -3273,30 +3149,15 @@ function openCardDetailModal(taskId, options = {}) {
     const commentSubmitBtn = modalOverlay.querySelector(".comment-submit-btn");
 
     if (commentInput) {
-      console.log(
-        "Mentions: Initializing event listeners for comment input:",
-        commentInput
-      );
       commentInput.addEventListener("input", handleMentionTextareaInput);
       commentInput.addEventListener("keydown", handleMentionTextareaKeydown);
       commentInput.addEventListener("focus", () => {
-        console.log(
-          "Mentions: Comment input focused. CurrentMentionTextarea:",
-          currentMentionTextarea
-        );
       });
       commentInput.addEventListener("blur", (event) => {
-        console.log(
-          "Mentions: Comment input blurred. CurrentMentionTextarea:",
-          currentMentionTextarea
-        );
         setTimeout(() => {
           const activeElement = document.activeElement;
 
           if (mentionsDropdown && mentionsDropdown.contains(activeElement)) {
-            console.log(
-              "Mentions: Blur on comment input, but focus is within the mentions dropdown. Not hiding."
-            );
             return;
           }
 
@@ -3305,9 +3166,6 @@ function openCardDetailModal(taskId, options = {}) {
             mentionsDropdown.style.display === "block" &&
             currentMentionTextarea === commentInput
           ) {
-            console.log(
-              "Mentions: Hiding dropdown due to blur on comment input."
-            );
             hideMentionsDropdown();
           }
         }, 150);
@@ -3433,7 +3291,6 @@ function openCardDetailModal(taskId, options = {}) {
           }
         }
       } catch (error) {
-        console.error("Ошибка при добавлении комментария:", error);
         alert("Не удалось добавить комментарий: " + error.message);
       }
     });
@@ -3824,7 +3681,6 @@ function deleteComment(taskId, commentId, commentElement) {
 
     document.addEventListener("keydown", handleKeydown);
   } catch (error) {
-    console.error("Ошибка при удалении комментария:", error);
     alert("Не удалось удалить комментарий: " + error.message);
   }
 }
@@ -3909,7 +3765,6 @@ function toggleTaskCompletion(taskId) {
     }
 
     if (!foundTask) {
-      console.error("Задача не найдена");
       return;
     }
 
@@ -3944,14 +3799,7 @@ function toggleTaskCompletion(taskId) {
 
     boardData.columns[columnIndex].tasks[taskIndex] = foundTask;
     updateBoardData(boardData);
-
-    console.log(
-      `Задача ${taskId} отмечена как ${
-        foundTask.completed ? "выполненная" : "невыполненная"
-      }`
-    );
   } catch (error) {
-    console.error("Ошибка при изменении статуса задачи:", error);
   }
 }
 
@@ -4314,9 +4162,6 @@ function addChecklistItem(taskId, checklistId, itemText) {
           });
 
         const newElementItemId = newItemElement.dataset.itemId;
-        console.log(
-          `[addChecklistItem] Calling setupChecklistItemActionButtons for new item. DOM ID: ${newElementItemId}, Original newItem.id: ${newItem.id}`
-        );
         if (newElementItemId !== newItem.id) {
           console.warn(
             `[addChecklistItem] Mismatch! newItem.id (${newItem.id}) vs newItemElement.dataset.itemId (${newElementItemId})`
@@ -4618,9 +4463,6 @@ function setupChecklistItemActionButtons(
   checklistId,
   itemId
 ) {
-  console.log(
-    `[setupChecklistItemActionButtons] Called for itemElement (ID from dataset: ${itemElement.dataset.itemId}), passed itemId: ${itemId}`
-  );
   const assignUserBtn = itemElement.querySelector(
     ".checklist-item-assign-user-btn"
   );
@@ -4654,13 +4496,6 @@ function setupChecklistItemActionButtons(
           userDiv.dataset.userName = user.fullName || user.username;
           userDiv.addEventListener("click", () => {
             const currentItemId = itemId;
-            console.log(
-              `[UserDiv Click] START. User to add: ${user.id} (${
-                user.fullName || user.username
-              }), Target ItemId: ${currentItemId}, DOM Element data-item-id: ${
-                itemElement.dataset.itemId
-              }`
-            );
 
             if (itemElement.dataset.itemId !== currentItemId) {
               console.error(
@@ -4688,10 +4523,6 @@ function setupChecklistItemActionButtons(
             );
 
             if (itemToUpdate) {
-              console.log(
-                `[UserDiv Click] Item ${currentItemId} FOUND in data. Current assignedUsers:`,
-                JSON.stringify(itemToUpdate.assignedUsers)
-              );
               if (!itemToUpdate.assignedUsers) {
                 itemToUpdate.assignedUsers = [];
               }
@@ -4700,10 +4531,6 @@ function setupChecklistItemActionButtons(
                   id: user.id,
                   name: user.fullName || user.username,
                 });
-                console.log(
-                  `[UserDiv Click] User ${user.id} pushed. Item's assignedUsers NOW:`,
-                  JSON.stringify(itemToUpdate.assignedUsers)
-                );
 
                 updateBoardData(boardData);
                 updateUserCardHighlight(taskId);
@@ -4713,9 +4540,6 @@ function setupChecklistItemActionButtons(
                 );
 
                 if (freshItemElement) {
-                  console.log(
-                    `[UserDiv Click] Calling renderAssignedUsersForChecklistItem for FRESH DOM item with data-id ${freshItemElement.dataset.itemId} (target item id: ${itemToUpdate.id})`
-                  );
                   if (!document.body.contains(freshItemElement)) {
                     console.error(
                       "[UserDiv Click] freshItemElement is DETACHED from DOM before rendering assigned users!",
@@ -4729,18 +4553,12 @@ function setupChecklistItemActionButtons(
                     checklistId,
                     itemToUpdate.id
                   );
-                  console.log(
-                    `[UserDiv Click] FINISHED renderAssignedUsersForChecklistItem for item ${itemToUpdate.id}`
-                  );
                 } else {
                   console.error(
                     `[UserDiv Click] CRITICAL: freshItemElement with data-item-id '${currentItemId}' NOT FOUND in DOM before rendering assigned users.`
                   );
                 }
               } else {
-                console.log(
-                  `[UserDiv Click] User ${user.id} already assigned to item ${currentItemId}.`
-                );
               }
             } else {
               console.error(
@@ -4897,12 +4715,6 @@ function renderAssignedUsersForChecklistItem(
   checklistId,
   itemId
 ) {
-  console.log(
-    `[renderAssignedUsersForChecklistItem] Called for itemId: ${itemId}, DOM item data-id: ${
-      itemElement ? itemElement.dataset.itemId : "NULL itemElement"
-    }. Users to render:`,
-    JSON.stringify(assignedUsers)
-  );
 
   if (!itemElement) {
     console.error(
@@ -4930,9 +4742,6 @@ function renderAssignedUsersForChecklistItem(
   }
 
   assignedUsersContainer.innerHTML = "";
-  console.log(
-    `[renderAssignedUsersForChecklistItem] Cleared innerHTML of assignedUsersContainer for item ${itemId}`
-  );
 
   if (assignedUsers && assignedUsers.length > 0) {
     assignedUsers.forEach((user) => {

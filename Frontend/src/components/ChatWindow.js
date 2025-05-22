@@ -1,10 +1,4 @@
 import { chatService } from "../services/chat-service.js";
-console.log("ChatService imported in ChatWindow:", chatService);
-console.log("typeof chatService.editMessage:", typeof chatService?.editMessage);
-console.log(
-  "typeof chatService.deleteMessage:",
-  typeof chatService?.deleteMessage
-);
 
 import { workspaceService } from "../services/workspace-service.js";
 import { authService } from "../services/auth-service.js";
@@ -116,14 +110,20 @@ function createMessageElement(msg, isContinuation = false) {
     replyDiv.innerHTML = `
       <div class="reply-block-accent"></div>
       <div class="reply-block-main">
-        <span class="reply-block-username">${msg.parentMessagePreview.senderName}</span>
-        <span class="reply-block-content">${msg.parentMessagePreview.contentPreview || ""}</span>
+        <span class="reply-block-username">${
+          msg.parentMessagePreview.senderName
+        }</span>
+        <span class="reply-block-content">${
+          msg.parentMessagePreview.contentPreview || ""
+        }</span>
       </div>
     `;
     replyDiv.style.cursor = "pointer";
     replyDiv.title = "Показать исходное сообщение";
     replyDiv.onclick = () => {
-      const target = document.querySelector(`.chat-ui-message[data-message-id="${msg.parentMessagePreview.id}"]`);
+      const target = document.querySelector(
+        `.chat-ui-message[data-message-id="${msg.parentMessagePreview.id}"]`
+      );
       if (target) {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
         target.classList.add("highlighted-message");
@@ -131,6 +131,79 @@ function createMessageElement(msg, isContinuation = false) {
       }
     };
     messageBody.appendChild(replyDiv);
+  }
+
+  if (msg.attachmentUrl) {
+    const attachmentDiv = document.createElement("div");
+    attachmentDiv.className = "chat-ui-attachment-block";
+
+    const isImage =
+      msg.attachmentType &&
+      /^image\/(jpeg|png|webp|gif|jpg)$/i.test(msg.attachmentType);
+
+    if (isImage) {
+      const img = document.createElement("img");
+      img.className = "chat-attachment-image";
+      img.src = `/api/files/${msg.id}/download`;
+      img.alt = msg.attachmentName || "Изображение";
+      img.loading = "lazy";
+      img.onclick = () => {
+        window.open(`/api/files/${msg.id}/download`, "_blank");
+      };
+      attachmentDiv.appendChild(img);
+    } else {
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "attachment-icon";
+      if (
+        msg.attachmentType &&
+        msg.attachmentType.startsWith("application/pdf")
+      ) {
+        iconSpan.textContent = "📄";
+      } else {
+        iconSpan.textContent = "📎";
+      }
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "attachment-name";
+      nameSpan.textContent = msg.attachmentName || "Вложение";
+
+      const sizeSpan = document.createElement("span");
+      sizeSpan.className = "attachment-size";
+      if (msg.attachmentSize) {
+        sizeSpan.textContent = `(${formatFileSize(msg.attachmentSize)})`;
+      }
+
+      const downloadBtn = document.createElement("button");
+      downloadBtn.className = "chat-ui-attachment-download-btn";
+      downloadBtn.type = "button";
+      downloadBtn.title = "Скачать файл";
+      downloadBtn.innerHTML = "⬇️";
+      downloadBtn.onclick = async (e) => {
+        e.preventDefault();
+        try {
+          const blob = await chatService.downloadFile(msg.id);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = msg.attachmentName || "file";
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+            a.remove();
+          }, 100);
+        } catch (err) {
+          alert("Ошибка при скачивании файла: " + err.message);
+        }
+      };
+
+      attachmentDiv.appendChild(iconSpan);
+      attachmentDiv.appendChild(nameSpan);
+      attachmentDiv.appendChild(sizeSpan);
+      attachmentDiv.appendChild(downloadBtn);
+    }
+
+    messageBody.appendChild(attachmentDiv);
   }
 
   messageBody.appendChild(messageTextDiv);
@@ -167,7 +240,7 @@ function createMessageElement(msg, isContinuation = false) {
       currentReplyToMessageId = msg.id;
       currentReplyToPreview = {
         senderName: msg.senderName,
-        content: msg.content
+        content: msg.content,
       };
       showReplyPreview();
     });
@@ -180,7 +253,7 @@ const MESSAGE_GROUPING_THRESHOLD_MINUTES = 5;
 
 function renderChatMessages(messages) {
   const messagesContainer = document.getElementById("chat-messages");
-    if (!messagesContainer) return;
+  if (!messagesContainer) return;
 
   messagesContainer.innerHTML = "";
   let lastSenderId = null;
@@ -209,10 +282,8 @@ function renderChatMessages(messages) {
 }
 
 function handleNewMessage(message) {
-  console.log("Входящее WebSocket сообщение в ChatWindow:", message);
   const messagesContainer = document.getElementById("chat-messages");
   if (!messagesContainer) {
-    console.error("ChatWindow: messagesContainer не найден в handleNewMessage");
     return;
   }
 
@@ -220,9 +291,6 @@ function handleNewMessage(message) {
   const activeChatId = Number(currentChatId);
 
   if (messageChatId !== activeChatId) {
-    console.log(
-      `ChatWindow: Сообщение для другого чата (${messageChatId}), текущий активный чат (${activeChatId}). Игнорируем.`
-    );
     return;
   }
 
@@ -230,21 +298,12 @@ function handleNewMessage(message) {
 
   switch (messageType) {
     case "NEW_MESSAGE":
-      console.log(
-        `ChatWindow: Обработка нового сообщения (ID: ${message.id}) для чата ${activeChatId}`
-      );
 
       if (chatHistoryCache[activeChatId]) {
         if (!chatHistoryCache[activeChatId].some((m) => m.id === message.id)) {
           chatHistoryCache[activeChatId].push(message);
-          console.log(
-            `ChatWindow: Новое сообщение добавлено в кэш чата ${activeChatId}`
-          );
         }
       } else {
-        console.log(
-          `ChatWindow: Кэш для чата ${activeChatId} еще не создан, новое сообщение не добавлено в кэш (это может быть нормально, если история еще не загружена).`
-        );
       }
 
       let isContinuation = false;
@@ -272,56 +331,28 @@ function handleNewMessage(message) {
 
       const newMessageElement = createMessageElement(message, isContinuation);
       messagesContainer.appendChild(newMessageElement);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
       break;
 
     case "MESSAGE_EDITED":
-      console.log(
-        `ChatWindow: Обработка отредактированного сообщения (ID: ${
-          message.messageId || message.id
-        }) для чата ${activeChatId}`
-      );
 
       const editedMessageId = message.messageId || message.id;
       if (editedMessageId && message.payload) {
         updateMessageInDOM(editedMessageId, message.payload);
-        console.log(
-          `ChatWindow: Сообщение ${editedMessageId} обновлено в DOM и кэше.`
-        );
       } else {
-        console.error(
-          "ChatWindow: Некорректные данные для MESSAGE_EDITED:",
-          message
-        );
       }
       break;
 
     case "MESSAGE_DELETED":
-      console.log(
-        `ChatWindow: Обработка удаленного сообщения (ID: ${
-          message.messageId || message.id
-        }) для чата ${activeChatId}`
-      );
 
       const deletedMessageId = message.messageId || message.id;
       if (deletedMessageId) {
         deleteMessageFromDOM(deletedMessageId);
-        console.log(
-          `ChatWindow: Сообщение ${deletedMessageId} удалено из DOM и кэша.`
-        );
       } else {
-        console.error(
-          "ChatWindow: Некорректные данные для MESSAGE_DELETED:",
-          message
-        );
       }
       break;
 
     default:
-      console.warn(
-        `ChatWindow: Получен неизвестный тип сообщения WebSocket: ${messageType}`,
-        message
-      );
   }
 }
 
@@ -329,9 +360,6 @@ async function loadChatHistory(chatId) {
   const messagesContainer = document.getElementById("chat-messages");
   const now = Date.now();
 
-  console.log(
-    `[LOAD HISTORY] Called for chatId: ${chatId}. Current currentChatId: ${currentChatId}`
-  );
 
   const isCached = !!chatHistoryCache[chatId];
   const cacheTimestamp = lastChatHistoryFetchTime[chatId];
@@ -340,38 +368,25 @@ async function loadChatHistory(chatId) {
     cacheTimestamp &&
     now - cacheTimestamp < CHAT_HISTORY_CACHE_TIMEOUT;
 
-  console.log(
-    `[LOAD HISTORY ${chatId}] Cache check: isCached=${isCached}, cacheTimestamp=${cacheTimestamp}, isCacheValid=${isCacheValid}`
-  );
 
   if (isCacheValid) {
-    console.log(`[LOAD HISTORY ${chatId}] Using cached history.`);
     renderChatMessages(chatHistoryCache[chatId]);
     setupChatInput();
     return;
   } else {
-    console.log(
-      `[LOAD HISTORY ${chatId}] Cache is NOT valid or missing. Proceeding to fetch from server.`
-    );
   }
 
   if (messagesContainer)
     messagesContainer.innerHTML =
       '<div class="chat-loading">Загрузка истории сообщений...</div>';
-    
-    if (!currentWorkspaceId || !chatId) {
-    console.error(
-      `[LOAD HISTORY ${chatId}] Cannot load history: workspaceId (${currentWorkspaceId}) or chatId (${chatId}) is not defined.`
-    );
+
+  if (!currentWorkspaceId || !chatId) {
     if (messagesContainer)
       messagesContainer.innerHTML =
         '<div class="chat-error">Ошибка: ID рабочего пространства или чата не определены.</div>';
-        return;
-    }
+    return;
+  }
 
-  console.log(
-    `[LOAD HISTORY ${chatId}] Fetching messages for workspace ${currentWorkspaceId}, chat ${chatId}`
-  );
   try {
     const historyPage = await workspaceService.getChatMessages(
       currentWorkspaceId,
@@ -379,17 +394,10 @@ async function loadChatHistory(chatId) {
       0,
       50
     );
-    console.log(`[LOAD HISTORY ${chatId}] Received historyPage:`, historyPage);
-        if (historyPage && historyPage.content) {
+    if (historyPage && historyPage.content) {
       if (historyPage.content.length > 0) {
-        console.log(
-          `[LOAD HISTORY ${chatId}] Rendering ${historyPage.content.length} messages from server.`
-        );
         renderChatMessages(historyPage.content);
       } else {
-        console.log(
-          `[LOAD HISTORY ${chatId}] Server returned no messages. Displaying 'empty'.`
-        );
         if (messagesContainer)
           messagesContainer.innerHTML =
             '<div class="chat-empty">Сообщений пока нет.</div>';
@@ -397,26 +405,15 @@ async function loadChatHistory(chatId) {
 
       chatHistoryCache[chatId] = historyPage.content;
       lastChatHistoryFetchTime[chatId] = now;
-      console.log(`[LOAD HISTORY ${chatId}] History (or empty array) cached.`);
-        } else {
-      console.log(
-        `[LOAD HISTORY ${chatId}] historyPage or historyPage.content is null/undefined. Displaying 'empty'.`
-      );
+    } else {
       if (messagesContainer)
         messagesContainer.innerHTML =
           '<div class="chat-empty">Сообщений пока нет.</div>';
 
       chatHistoryCache[chatId] = [];
       lastChatHistoryFetchTime[chatId] = now;
-      console.log(
-        `[LOAD HISTORY ${chatId}] Empty array cached due to null/undefined historyPage.content.`
-      );
-        }
-    } catch (error) {
-    console.error(
-      `[LOAD HISTORY ${chatId}] Error loading chat history:`,
-      error
-    );
+    }
+  } catch (error) {
     if (messagesContainer)
       messagesContainer.innerHTML = `<div class="chat-error">Не удалось загрузить сообщения: ${error.message}</div>`;
   }
@@ -427,60 +424,130 @@ async function loadChatHistory(chatId) {
 function setupChatInput() {
   const messageInput = document.getElementById("chat-message-input");
   const sendMessageButton = document.getElementById("send-chat-message-btn");
+  const attachmentInput = document.getElementById("chat-attachment-input");
+  const selectedFileBlock = document.getElementById("chat-selected-file-block");
 
-    const sendMessageHandler = () => {
-        if (!currentChatId || !messageInput) return;
-        const content = messageInput.value.trim();
-        if (content) {
-            chatService.sendMessage(currentChatId, content, currentReplyToMessageId);
+  let selectedFile = null;
+
+  function updateSelectedFileBlock() {
+    if (selectedFile) {
+      selectedFileBlock.innerHTML = `
+        <span class="selected-file-icon">📎</span>
+        <span class="selected-file-name">${selectedFile.name}</span>
+        <span class="selected-file-size">(${formatFileSize(selectedFile.size)})</span>
+        <button class="remove-selected-file-btn" title="Удалить файл">&times;</button>
+      `;
+      selectedFileBlock.style.display = "flex";
+      selectedFileBlock.querySelector(".remove-selected-file-btn").onclick = () => {
+        selectedFile = null;
+        attachmentInput.value = "";
+        updateSelectedFileBlock();
+      };
+    } else {
+      selectedFileBlock.style.display = "none";
+      selectedFileBlock.innerHTML = "";
+    }
+  }
+
+  if (attachmentInput) {
+    attachmentInput.addEventListener("change", (e) => {
+      selectedFile = e.target.files[0] || null;
+      updateSelectedFileBlock();
+    });
+  }
+
+  
+  const chatInputArea = document.querySelector(".chat-input-area");
+  if (chatInputArea) {
+    chatInputArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      chatInputArea.classList.add("dragover");
+    });
+    chatInputArea.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      chatInputArea.classList.remove("dragover");
+    });
+    chatInputArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      chatInputArea.classList.remove("dragover");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        selectedFile = e.dataTransfer.files[0];
+        attachmentInput.value = ""; 
+        updateSelectedFileBlock();
+      }
+    });
+  }
+
+  const sendMessageHandler = async () => {
+    if (!currentChatId || !messageInput) return;
+    const content = messageInput.value.trim();
+
+    let attachmentData = null;
+    if (selectedFile) {
+      try {
+        attachmentData = await chatService.uploadFile(selectedFile);
+      } catch (e) {
+        alert("Ошибка загрузки файла: " + e.message);
+        return;
+      }
+    }
+
+    if (content || attachmentData) {
+      const payload = {
+        content,
+        parentMessageId: currentReplyToMessageId,
+        attachmentUrl: attachmentData?.url,
+        attachmentName: attachmentData?.name,
+        attachmentType: attachmentData?.type,
+        attachmentSize: attachmentData?.size,
+      };
+      chatService.sendMessageWithAttachment(currentChatId, payload);
       messageInput.value = "";
+      if (attachmentInput) attachmentInput.value = "";
+      selectedFile = null;
+      updateSelectedFileBlock();
       currentReplyToMessageId = null;
       currentReplyToPreview = null;
       const replyPreview = document.getElementById("reply-preview");
       if (replyPreview) replyPreview.style.display = "none";
-        }
-    };
-
-    if (sendMessageButton) {
-    sendMessageButton.addEventListener("click", sendMessageHandler);
     }
-    if (messageInput) {
+  };
+
+  if (sendMessageButton) {
+    sendMessageButton.onclick = sendMessageHandler;
+  }
+  if (messageInput) {
     messageInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessageHandler();
-            }
-        });
-    }
+        e.preventDefault();
+        sendMessageHandler();
+      }
+    });
+  }
 }
 
 export async function renderChatPage(chatId, workspaceId) {
-  console.log(
-    `Рендеринг страницы чата: chatId=${chatId}, workspaceId=${workspaceId}`
-  );
-    currentChatId = chatId;
-    currentWorkspaceId = workspaceId;
+  currentChatId = chatId;
+  currentWorkspaceId = workspaceId;
 
   const appContainer = document.querySelector(".dashboard-content");
-    if (!appContainer) {
-    console.error("Основной контейнер .dashboard-content не найден");
-        return;
-    }
+  if (!appContainer) {
+    return;
+  }
 
-    let chatName = `Чат ${chatId}`;
-    try {
-        if (workspaceId && chatId) {
+  let chatName = `Чат ${chatId}`;
+  try {
+    if (workspaceId && chatId) {
       const chatDetails = await workspaceService.getChatById(
         workspaceId,
         chatId
       );
-             if (chatDetails) chatName = chatDetails.name;
-        }
+      if (chatDetails) chatName = chatDetails.name;
+    }
   } catch (e) {
-    console.error("Не удалось получить имя чата", e);
   }
 
-    appContainer.innerHTML = `
+  appContainer.innerHTML = `
         <div class="chat-window-container">
             <div class="chat-header">
                 <h2 id="chat-name-header">${chatName}</h2>
@@ -490,6 +557,11 @@ export async function renderChatPage(chatId, workspaceId) {
             </div>
             <div class="chat-input-area">
                 <textarea id="chat-message-input" placeholder="Введите сообщение..."></textarea>
+                <div id="chat-selected-file-block" class="chat-selected-file-block" style="display:none;"></div>
+                <label class="chat-attach-label" title="Прикрепить файл">
+                    <input type="file" id="chat-attachment-input" style="display:none;" />
+                    <span class="chat-attach-icon">📎</span>
+                </label>
                 <button id="send-chat-message-btn" class="btn-primary">Отправить</button>
             </div>
         </div>
@@ -497,40 +569,29 @@ export async function renderChatPage(chatId, workspaceId) {
 
   if (messageListener && currentChatId && chatService.stompClient) {
     chatService.unsubscribeFromChat(currentChatId, messageListener);
-    }
-    messageListener = handleNewMessage;
+  }
+  messageListener = handleNewMessage;
 
   try {
     await chatService.subscribeToChat(currentChatId, messageListener);
 
-    console.log(
-      "ChatWindow: Успешно подписаны на чат (или уже были подписаны)",
-      currentChatId
-    );
 
-            if (currentWorkspaceId && currentChatId) {
-                await loadChatHistory(currentChatId); 
-            } else {
-      console.error(
-        "Не могу загрузить историю чата: currentWorkspaceId или currentChatId не установлены после подписки."
-      );
+    if (currentWorkspaceId && currentChatId) {
+      await loadChatHistory(currentChatId);
+    } else {
       const messagesContainer = document.getElementById("chat-messages");
       if (messagesContainer)
         messagesContainer.innerHTML =
           '<div class="chat-error">Ошибка: ID чата или рабочего пространства не определены.</div>';
     }
   } catch (error) {
-    console.error(
-      "ChatWindow: Ошибка при подписке на чат или загрузке истории:",
-      error
-    );
     const messagesContainer = document.getElementById("chat-messages");
     if (messagesContainer)
       messagesContainer.innerHTML =
         '<div class="chat-error">Не удалось подключиться к чату или загрузить историю.</div>';
   }
 
-    setupChatInput();
+  setupChatInput();
 }
 
 export function cleanupChatPage() {
@@ -540,19 +601,17 @@ export function cleanupChatPage() {
     chatService.stompClient &&
     chatService.stompClient.connected
   ) {
-        chatService.unsubscribeFromChat(currentChatId, messageListener);
-    console.log("Отписались от чата (STOMP):", currentChatId);
-    }
+    chatService.unsubscribeFromChat(currentChatId, messageListener);
+  }
 
-    currentChatId = null;
-    currentWorkspaceId = null;
-    messageListener = null;
+  currentChatId = null;
+  currentWorkspaceId = null;
+  messageListener = null;
 
   const messagesContainer = document.getElementById("chat-messages");
   if (messagesContainer) {
   }
 
-  console.log("ChatWindow очищен.");
 }
 
 function startEditMessage(messageDiv, messageId) {
@@ -598,9 +657,6 @@ function startEditMessage(messageDiv, messageId) {
     const newContent = editTextarea.value.trim();
     if (newContent && newContent !== originalContent) {
       if (!chatService || typeof chatService.editMessage !== "function") {
-        console.error(
-          "[EDIT REQUEST] chatService.editMessage не найден или не является функцией. Убедитесь, что chatService правильно импортирован и инициализирован."
-        );
 
         finishEditMessage(messageDiv);
         return;
@@ -608,14 +664,7 @@ function startEditMessage(messageDiv, messageId) {
 
       try {
         await chatService.editMessage(currentChatId, messageId, newContent);
-        console.log(
-          `[EDIT REQUEST SENT] Запрос на редактирование отправлен: chatId=${currentChatId}, messageId=${messageId}`
-        );
       } catch (error) {
-        console.error(
-          `[EDIT REQUEST] Ошибка при отправке запроса на редактирование сообщения ${messageId}:`,
-          error
-        );
       }
     }
     finishEditMessage(messageDiv);
@@ -697,23 +746,13 @@ async function confirmDeleteMessage(messageId) {
     confirmBtn.onclick = async () => {
       closeModal();
       if (!chatService || typeof chatService.deleteMessage !== "function") {
-        console.error(
-          "[DELETE REQUEST] chatService.deleteMessage не найден или не является функцией."
-        );
         resolve(false);
         return;
       }
       try {
         await chatService.deleteMessage(currentChatId, messageId);
-        console.log(
-          `[DELETE REQUEST SENT] Запрос на удаление отправлен: chatId=${currentChatId}, messageId=${messageId}`
-        );
         resolve(true);
       } catch (error) {
-        console.error(
-          `[DELETE REQUEST] Ошибка при отправке запроса на удаление сообщения ${messageId}:`,
-          error
-        );
 
         resolve(false);
       }
@@ -779,7 +818,6 @@ function updateMessageInDOM(messageId, updatedData) {
     if (msgIndex !== -1) {
       chatHistoryCache[currentChatId][msgIndex].content = updatedData.content;
       chatHistoryCache[currentChatId][msgIndex].editedAt = updatedData.editedAt;
-      console.log(`[CACHE UPDATE] Сообщение ${messageId} обновлено в кэше.`);
     }
   }
 }
@@ -796,7 +834,6 @@ function deleteMessageFromDOM(messageId) {
     chatHistoryCache[currentChatId] = chatHistoryCache[currentChatId].filter(
       (m) => m.id !== messageId
     );
-    console.log(`[CACHE UPDATE] Сообщение ${messageId} удалено из кэша.`);
 
     if (chatHistoryCache[currentChatId].length === 0) {
       const messagesContainer = document.getElementById("chat-messages");
@@ -819,8 +856,13 @@ function showReplyPreview() {
   }
   replyPreview.innerHTML = `
     <div class="reply-preview-main">
-      <div class="reply-preview-label">Отвечает на <b>${currentReplyToPreview.senderName}</b></div>
-      <div class="reply-preview-content">${currentReplyToPreview.content.slice(0, 120)}${currentReplyToPreview.content.length > 120 ? "..." : ""}</div>
+      <div class="reply-preview-label">Отвечает на <b>${
+        currentReplyToPreview.senderName
+      }</b></div>
+      <div class="reply-preview-content">${currentReplyToPreview.content.slice(
+        0,
+        120
+      )}${currentReplyToPreview.content.length > 120 ? "..." : ""}</div>
     </div>
     <button class="cancel-reply-btn" title="Отменить ответ">&times;</button>
   `;
@@ -837,4 +879,11 @@ function showReplyPreview() {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
   }, 0);
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  const sizes = ["Б", "КБ", "МБ", "ГБ"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + " " + sizes[i];
 }

@@ -31,7 +31,6 @@ export function navigateTo(path) {
   const currentHash = window.location.hash.substring(1);
 
   if (currentHash === newHash) {
-    console.log(`Навигация пропущена: уже находимся по адресу ${newHash}`);
     return;
   }
 
@@ -41,11 +40,8 @@ export function navigateTo(path) {
     } else {
       window.location.hash = basePath;
     }
-    console.log(
-      `Навигация: переход на ${basePath}${queryParams ? "?" + queryParams : ""}`
-    );
+
   } else {
-    console.warn(`Маршрут "${basePath}" не найден`);
     window.location.hash = "/";
   }
 }
@@ -58,16 +54,12 @@ function handleRouteChange() {
   const routePath = basePath === "" ? "/" : basePath;
 
   if (currentRoute === routePath) {
-    console.log(
-      `Маршрутизация: пропускаем повторный рендеринг для ${routePath}`
-    );
     return;
   }
 
   if (hashPath === "") {
     const handler = routes["/"];
     if (handler) {
-      console.log("Маршрутизация: переход на главную страницу");
       currentRoute = "/";
       handler();
     }
@@ -77,11 +69,7 @@ function handleRouteChange() {
   const handler = routes[routePath];
 
   if (handler) {
-    console.log(
-      `Маршрутизация: переход по маршруту ${routePath}${
-        queryParams ? " с параметрами: " + queryParams : ""
-      }`
-    );
+
     currentRoute = routePath;
     handler();
   } else {
@@ -92,17 +80,11 @@ function handleRouteChange() {
       routes[normalizedPath] || routes[normalizedPath + "/"];
 
     if (alternativeHandler) {
-      console.log(
-        `Маршрутизация: переход по альтернативному маршруту ${normalizedPath}${
-          queryParams ? " с параметрами: " + queryParams : ""
-        }`
-      );
+
       currentRoute = normalizedPath;
       alternativeHandler();
     } else {
-      console.warn(
-        `Маршрут "${routePath}" не найден, перенаправление на главную`
-      );
+
       currentRoute = "/";
       window.location.hash = "/";
     }
@@ -118,7 +100,6 @@ export function protectRoute(handler, redirectPath = "/login") {
     if (isAuthenticated()) {
       handler();
     } else {
-      console.warn("Доступ запрещен. Перенаправление на страницу входа");
       navigateTo(redirectPath);
     }
   };

@@ -22,4 +22,9 @@ public class ChatMessageDto {
     private LocalDateTime sentAt;
     private List<Long> readByUsersIds;
     private ParentMessagePreviewDto parentMessagePreview;
+
+    private String attachmentUrl;
+    private String attachmentName;
+    private String attachmentType;
+    private Long attachmentSize;
 } 

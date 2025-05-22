@@ -32,22 +32,17 @@ export function updateBoardsCache(newCache) {
 }
 
 export function invalidateWorkspaceChatsCache(workspaceId) {
-  console.log(
-    `[САЙДБАР] invalidateWorkspaceChatsCache вызван для РП ${workspaceId}. Инвалидируем общий кэш чатов.`
-  );
   invalidateAllUserChatsCache();
 }
 
 export function invalidateAllUserChatsCache() {
   allUserChatsCache = null;
   lastAllUserChatsFetchTime = 0;
-  console.log("[САЙДБАР] Кэш ВСЕХ чатов пользователя инвалидирован.");
 }
 
 export function invalidateWorkspacesCache() {
   workspacesCache = null;
   lastWorkspacesFetchTime = 0;
-  console.log("[САЙДБАР] Кэш рабочих пространств был инвалидирован.");
 }
 
 export async function renderDashboardSidebar(
@@ -55,13 +50,6 @@ export async function renderDashboardSidebar(
   activeWorkspaceIdFromDashboard = null
 ) {
   let activeEntityType = null;
-
-  console.log(
-    "Рендеринг боковой панели. Активный элемент (из параметра):",
-    activeEntityId,
-    "Активное пространство (из параметра):",
-    activeWorkspaceIdFromDashboard
-  );
 
   const currentHash = window.location.hash.substring(1);
   const urlParams = new URLSearchParams(
@@ -89,15 +77,6 @@ export async function renderDashboardSidebar(
 
   const currentActiveWorkspaceId =
     activeWorkspaceIdFromDashboard || workspaceIdFromUrl;
-
-  console.log(
-    "Данные для сайдбара: активный элемент =",
-    activeEntityId,
-    "Тип =",
-    activeEntityType,
-    "активное пространство =",
-    currentActiveWorkspaceId
-  );
 
   setTimeout(() => {
     stabilizeDOMAfterRender();
@@ -144,14 +123,8 @@ export async function renderDashboardSidebar(
 
   if (!allUserChatsCache || now - lastAllUserChatsFetchTime > CACHE_TIMEOUT) {
     try {
-      console.log("[САЙДБАР] Загрузка ВСЕХ чатов пользователя...");
       allUserChatsCache = await workspaceService.getAllUserChats();
       lastAllUserChatsFetchTime = now;
-      console.log(
-        `[САЙДБАР] ВСЕ чаты пользователя загружены (${
-          (allUserChatsCache || []).length
-        } шт).`
-      );
     } catch (error) {
       console.error(
         "[САЙДБАР] Ошибка при загрузке всех чатов пользователя:",
@@ -209,10 +182,6 @@ export async function renderDashboardSidebar(
           if (!allUserChatsCache.some((c) => c.id === chatData.id)) {
             allUserChatsCache.push(chatData);
           }
-
-          console.log(
-            `Активный чат ${activeEntityId} из пространства ${currentActiveWorkspaceId} загружен отдельно и добавлен в allUserChatsCache`
-          );
         }
       } catch (error) {
         console.error(
@@ -246,9 +215,6 @@ export async function renderDashboardSidebar(
       } else {
         expandedWorkspacesCache = [...savedExpandedWorkspaces];
       }
-      console.log(
-        `Активное РП ${activeItemWorkspaceId} добавлено в expandedWorkspacesCache для текущего рендера.`
-      );
     }
   }
 
@@ -306,11 +272,6 @@ export async function renderDashboardSidebar(
                   workspace.id.toString() === currentActiveWorkspaceId;
 
                 if (workspace.id.toString() === currentActiveWorkspaceId) {
-                  console.log(
-                    `[САЙДБАР] Рендеринг чата в РП ${workspace.id.toString()}: ID=${
-                      chat.id
-                    }, Name=${chat.name}. Активен ли этот чат: ${isChatActive}`
-                  );
                 }
                 return `
           <div class="workspace-chat ${isChatActive ? "active" : ""}"
@@ -416,7 +377,6 @@ function preserveExpandedWorkspaces() {
     expandedWorkspacesCache = expandedIds;
 
     localStorage.setItem("expanded_workspaces", JSON.stringify(expandedIds));
-    console.log("Сохранены раскрытые пространства:", expandedIds);
   } catch (error) {
     console.error(
       "Ошибка при сохранении состояния раскрытых пространств:",
@@ -427,10 +387,6 @@ function preserveExpandedWorkspaces() {
 
 function getSavedExpandedWorkspaces() {
   if (expandedWorkspacesCache) {
-    console.log(
-      "Используем кэш раскрытых пространств:",
-      expandedWorkspacesCache
-    );
     return expandedWorkspacesCache;
   }
 
@@ -499,8 +455,6 @@ export function setupSidebarEventListeners(
           });
         }
       });
-
-      console.log("Стили раскрытых пространств обновлены, DOM стабилизирован");
     }, 0);
 
     const boardItems = document.querySelectorAll(".workspace-board");
@@ -522,10 +476,6 @@ export function setupSidebarEventListeners(
             localStorage.setItem(
               "expanded_workspaces",
               JSON.stringify(expandedWorkspacesCache)
-            );
-            console.log(
-              "Автоматически добавили рабочее пространство перед переходом на доску:",
-              workspaceId
             );
           }
 
@@ -638,10 +588,6 @@ export function setupSidebarEventListeners(
             "expanded_workspaces",
             JSON.stringify(expandedWorkspacesCache)
           );
-          console.log(
-            "Перед переключением вкладки сохранены раскрытые пространства:",
-            expandedWorkspacesCache
-          );
 
           const tabType = tab.getAttribute("data-tab");
 
@@ -679,15 +625,12 @@ export function setupSidebarEventListeners(
 
 async function createNewBoard(onBoardSelect) {
   const boardName = prompt("Введите название новой доски:");
-  console.log("Введенное имя доски:", boardName);
 
   if (!boardName || boardName.trim() === "") {
-    console.log("Создание доски отменено: пустое имя");
     return;
   }
 
   try {
-    console.log("Начинаю создание доски:", boardName);
 
     const currentHash = window.location.hash.substring(1);
     const urlParams = new URLSearchParams(
@@ -716,10 +659,7 @@ async function createNewBoard(onBoardSelect) {
       boardList.innerHTML += loadingHtml;
     }
 
-    console.log("Отправка запроса на создание доски:", boardData);
-
     const newBoard = await kanbanService.createBoard(boardData);
-    console.log("Создана новая доска:", newBoard);
 
     if (boardsCache) {
       boardsCache.push(newBoard);
@@ -731,20 +671,11 @@ async function createNewBoard(onBoardSelect) {
     );
     cachedBoards.push(newBoard);
     localStorage.setItem("kanban_boards_cache", JSON.stringify(cachedBoards));
-    console.log(
-      "Кэш досок обновлен, текущее количество досок:",
-      cachedBoards.length
-    );
 
     if (typeof onBoardSelect === "function") {
-      console.log("Вызываем коллбэк с ID новой доски:", newBoard.id);
 
       onBoardSelect(newBoard.id);
     } else {
-      console.log(
-        "Коллбэк не предоставлен, выполняем перенаправление вручную на:",
-        `/dashboard?board=${newBoard.id}`
-      );
 
       if (workspaceId) {
         window.location.hash = `/dashboard?board=${newBoard.id}&workspace=${workspaceId}`;
@@ -807,7 +738,5 @@ function stabilizeDOMAfterRender() {
         toggleIcon.classList.add("workspace-toggle-fixed");
       }
     });
-
-    console.log("DOM стабилизирован после рендеринга");
   }, 0);
 }

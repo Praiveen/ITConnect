@@ -64,7 +64,7 @@ function renderHomePage() {
 function setupHomePageButtons() {
   document.querySelectorAll(".btn-register").forEach((button) => {
     button.addEventListener("click", () => {
-      console.log("Переход на страницу регистрации");
+      consol.log("Переход на страницу регистрации");
       import("./pages/register.js").then((module) => {
         module.renderRegisterPage();
       });
@@ -73,7 +73,6 @@ function setupHomePageButtons() {
 
   document.querySelectorAll(".btn-dashboard").forEach((button) => {
     button.addEventListener("click", () => {
-      console.log("Переход к дашборду");
       navigateTo("/dashboard");
     });
   });
@@ -111,7 +110,6 @@ async function checkAuthState() {
   try {
     try {
       await authService.getUserProfile();
-      console.log("Статус авторизации: авторизован");
 
       const redirectAfterAuth = sessionStorage.getItem("redirectAfterAuth");
       if (redirectAfterAuth) {
@@ -120,12 +118,10 @@ async function checkAuthState() {
         return true;
       }
     } catch (error) {
-      console.log("Статус авторизации: не авторизован");
     }
 
     return false;
   } catch (error) {
-    console.error("Ошибка при проверке авторизации:", error);
     return false;
   }
 }
@@ -137,7 +133,6 @@ async function initApp() {
 
   const hash = window.location.hash;
   if (hash && hash.length > 1) {
-    console.log("Обнаружен хэш в URL:", hash);
 
     return;
   }
@@ -157,10 +152,8 @@ function getCookies() {
     const cookieArray = cookies.split("; ");
 
     cookieArray.forEach((cookie) => {
-      console.log(cookie);
     });
   } else {
-    console.log("Куки не найдены.");
   }
 }
 

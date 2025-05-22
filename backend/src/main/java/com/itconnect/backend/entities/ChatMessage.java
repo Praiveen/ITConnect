@@ -51,4 +51,16 @@ public class ChatMessage {
     @JoinColumn(name = "parent_message_id", referencedColumnName = "id", nullable = true)
     private ChatMessage parentMessage;
 
+    @Column(name = "attachment_url")
+    private String attachmentUrl;
+
+    @Column(name = "attachment_name")
+    private String attachmentName;
+
+    @Column(name = "attachment_type")
+    private String attachmentType;
+
+    @Column(name = "attachment_size")
+    private Long attachmentSize;
+
 } 

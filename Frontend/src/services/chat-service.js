@@ -4,15 +4,15 @@ import Stomp from "stompjs";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 function getApiUrl(path) {
-  // path должен начинаться с /
+  
   if (API_BASE_URL) {
     return API_BASE_URL + path;
   }
-  // Если переменная не задана (локальная разработка) — используем прокси
+  
   return '/api' + path;
 }
 
-// Для WebSocket нужен полный адрес
+
 const SOCKET_URL = getApiUrl('/ws');
 
 class ChatService {
@@ -27,12 +27,10 @@ class ChatService {
 
   connect() {
     if (this.stompClient && this.stompClient.connected) {
-      console.log("STOMP клиент уже подключен.");
       return Promise.resolve(this.stompClient.connected);
     }
 
     if (this.isConnecting && this.connectionPromise) {
-      console.log("STOMP клиент уже в процессе подключения.");
       return this.connectionPromise.then(() => true).catch(() => false);
     }
 
@@ -47,7 +45,6 @@ class ChatService {
     this.hasConnectFailedRecently = false;
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        console.log("Создание SockJS подключения к:", SOCKET_URL);
         const socket = new SockJS(SOCKET_URL);
         this.stompClient = Stomp.over(socket);
         this.stompClient.debug = (str) => {};
@@ -57,7 +54,6 @@ class ChatService {
         this.stompClient.connect(
           headers,
           (frame) => {
-            console.log("STOMP подключение установлено успешно. Frame:", frame);
             this.isConnecting = false;
 
             resolve(true);
@@ -99,7 +95,6 @@ class ChatService {
       this.subscriptions.forEach((sub) => sub.unsubscribe());
       this.subscriptions.clear();
       this.stompClient.disconnect(() => {
-        console.log("STOMP клиент отключен.");
       });
       this.stompClient = null;
     }
@@ -121,9 +116,6 @@ class ChatService {
 
           return;
         }
-        console.log(
-          "STOMP подключен (из subscribeToChat), выполняем подписку."
-        );
       } catch (error) {
         console.error(
           "Ошибка при попытке подключения в subscribeToChat:",
@@ -147,7 +139,6 @@ class ChatService {
     const topic = `/topic/chat/${chatId}`;
 
     if (this.subscriptions.has(chatId) && !isResubscribe) {
-      console.log(`Уже подписаны на ${topic}. Добавляем слушателя.`);
       this.addMessageListener(chatId, onMessageReceived);
       return;
     }
@@ -155,12 +146,7 @@ class ChatService {
     if (this.subscriptions.has(chatId) && isResubscribe) {
       this.subscriptions.get(chatId).unsubscribe();
       this.subscriptions.delete(chatId);
-      console.log(
-        `Отписались от старой подписки на ${topic} перед переподпиской.`
-      );
     }
-
-    console.log(`Подписка на STOMP топик: ${topic}`);
     try {
       const subscription = this.stompClient.subscribe(topic, (message) => {
         const parsedMessage = JSON.parse(message.body);
@@ -176,7 +162,6 @@ class ChatService {
       });
       this.subscriptions.set(chatId, subscription);
       this.addMessageListener(chatId, onMessageReceived);
-      console.log(`Успешно подписаны на ${topic}`);
     } catch (error) {
       console.error(`Ошибка при подписке на STOMP топик ${topic}:`, error);
     }
@@ -193,7 +178,6 @@ class ChatService {
         this.subscriptions.get(chatId).unsubscribe();
         this.subscriptions.delete(chatId);
         this.messageListeners.delete(chatId);
-        console.log(`Отписались от STOMP топика для чата ${chatId}`);
       }
     }
   }
@@ -218,13 +202,25 @@ class ChatService {
 
     try {
       this.stompClient.send(destination, {}, JSON.stringify(payload));
-      console.log(`STOMP: сообщение отправлено на ${destination}:`, payload);
     } catch (error) {
       console.error(
         `Ошибка при отправке STOMP сообщения на ${destination}:`,
         error
       );
     }
+  }
+
+  sendMessageWithAttachment(chatId, payload) {
+    if (!this.stompClient || !this.stompClient.connected) {
+      console.error("Невозможно отправить сообщение: STOMP не подключен.");
+      return;
+    }
+    if (!chatId || (!payload.content && !payload.attachmentUrl)) {
+      console.error("ChatId и текст сообщения или файл не могут быть пустыми.");
+      return;
+    }
+    const destination = `/app/chat.sendMessage/${chatId}`;
+    this.stompClient.send(destination, {}, JSON.stringify(payload));
   }
 
   addMessageListener(chatId, callback) {
@@ -245,10 +241,6 @@ class ChatService {
       const destination = `/app/chat.editMessage/${chatId}/${messageId}`;
       const payload = { content: newContent };
       this.stompClient.send(destination, {}, JSON.stringify(payload));
-      console.log(
-        `ChatService: Edit message request sent to ${destination}`,
-        payload
-      );
     } else {
       console.error(
         "ChatService: STOMP client not connected. Cannot edit message."
@@ -263,13 +255,42 @@ class ChatService {
       const destination = `/app/chat.deleteMessage/${chatId}/${messageId}`;
 
       this.stompClient.send(destination, {}, JSON.stringify({}));
-      console.log(`ChatService: Delete message request sent to ${destination}`);
     } else {
       console.error(
         "ChatService: STOMP client not connected. Cannot delete message."
       );
       throw new Error("STOMP client not connected for deleting message");
     }
+  }
+
+
+  async uploadFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(getApiUrl("/files/upload"), {
+      method: "POST",
+      body: formData,
+      credentials: "include", 
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || "Ошибка загрузки файла");
+    }
+    return response.json();
+  }
+
+
+  async downloadFile(messageId) {
+    const response = await fetch(getApiUrl(`/files/${messageId}/download`), {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw new Error("Ошибка при скачивании файла");
+    }
+    return response.blob();
   }
 }
 
