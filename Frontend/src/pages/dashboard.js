@@ -132,6 +132,7 @@ async function declineInvitation(invitationId) {
 }
 
 async function refreshDashboardSidebar() {
+  const sidebarWasOpen = !!document.querySelector(".dashboard-sidebar.open");
   const sidebarContainer = document.getElementById("sidebarPlaceholder");
   if (!sidebarContainer) {
     console.error('Контейнер сайдбара "sidebarPlaceholder" не найден.');
@@ -148,9 +149,27 @@ async function refreshDashboardSidebar() {
 
   const sidebarHtml = await renderDashboardSidebar(
     activeEntityId,
-    activeWorkspaceId
+    activeWorkspaceId,
+    sidebarWasOpen
   );
   sidebarContainer.innerHTML = sidebarHtml;
+
+  if (sidebarWasOpen) {
+    const dashboardContainer = document.querySelector(".dashboard-container");
+    if (dashboardContainer) {
+      dashboardContainer.classList.add("sidebar-open");
+      let backdrop = document.querySelector(".sidebar-backdrop");
+      if (!backdrop) {
+        backdrop = document.createElement("div");
+        backdrop.className = "sidebar-backdrop";
+        dashboardContainer.appendChild(backdrop);
+        backdrop.addEventListener("click", () => {
+          document.getElementById("sidebarToggleBtn")?.click();
+        });
+      }
+      setTimeout(() => backdrop.classList.add("active"), 10);
+    }
+  }
 
   setupSidebarEventListeners(
     (selectedBoardId, selectedWsId) => {
@@ -175,6 +194,8 @@ async function refreshDashboardSidebar() {
 }
 
 async function handleDashboardHashChange() {
+  const sidebarWasOpen = !!document.querySelector(".dashboard-sidebar.open");
+
   const hash = window.location.hash.substring(1);
   if (hash.startsWith("/dashboard")) {
     const boardId = getBoardIdFromUrl();
@@ -261,7 +282,7 @@ async function handleDashboardHashChange() {
         }
       }
 
-      const promises = [renderDashboardSidebar(boardId || chatId, workspaceId)];
+      const promises = [renderDashboardSidebar(boardId || chatId, workspaceId, sidebarWasOpen)];
 
       if (shouldLoadBoard && boardId && !boardDataFromCache) {
         promises.push(kanbanService.getBoard(boardId));
@@ -282,7 +303,6 @@ async function handleDashboardHashChange() {
 
       setupSidebarEventListeners(
         (selectedBoardId) => {
-
           let dashboardPath;
 
           if (workspaceId) {
@@ -293,16 +313,11 @@ async function handleDashboardHashChange() {
 
           window.location.hash = dashboardPath;
         },
-
         (tabType) => {
-
           const dashboardPath = `/dashboard?workspace_tab=${tabType}`;
-
           window.location.hash = dashboardPath;
         },
-
         (selectedWorkspaceId) => {
-
           const dashboardPath = `/dashboard?workspace=${selectedWorkspaceId}&workspace_tab=${currentWorkspaceTab}`;
 
           if (workspaceId === selectedWorkspaceId) {
@@ -311,7 +326,6 @@ async function handleDashboardHashChange() {
 
           window.location.hash = dashboardPath;
         },
-
         (selectedChatId, selectedWorkspaceId) => {
           let dashboardPath;
           if (selectedWorkspaceId) {
@@ -344,14 +358,12 @@ async function handleDashboardHashChange() {
         setupBoardEventListeners(
           boardId,
           () => {
-
             currentDisplayedBoardId = null;
             window.location.hash = "/dashboard";
           },
           userRole
         );
       } else if (chatId && workspaceId && shouldLoadChat) {
-
         if (currentDisplayedBoardId) {
           cleanupBoardEventListeners();
           currentDisplayedBoardId = null;
@@ -360,7 +372,6 @@ async function handleDashboardHashChange() {
         await renderChatPage(chatId, workspaceId);
       } else if (workspaceId) {
         try {
-
           if (
             !workspaceId ||
             workspaceId === "undefined" ||
@@ -409,6 +420,44 @@ async function handleDashboardHashChange() {
           cleanupChatPage();
           window.location.hash = `/dashboard?workspace=${wsId}&workspace_tab=${currentWorkspaceTab}`;
         });
+      }
+
+      if (sidebarWasOpen) {
+        const sidebar = document.querySelector(".dashboard-sidebar");
+        const dashboardContainer = document.querySelector(".dashboard-container");
+
+        if (sidebar && dashboardContainer) {
+          dashboardContainer.classList.add("sidebar-open");
+
+          // Re-create backdrop
+          let backdrop = document.querySelector(".sidebar-backdrop");
+          if (!backdrop) {
+            backdrop = document.createElement("div");
+            backdrop.className = "sidebar-backdrop";
+            dashboardContainer.appendChild(backdrop);
+            backdrop.addEventListener("click", () => {
+              document.getElementById("sidebarToggleBtn")?.click();
+            });
+          }
+          setTimeout(() => {
+            if (backdrop) backdrop.classList.add("active");
+          }, 10);
+
+          // Re-enable animations for next user interaction
+          requestAnimationFrame(() => {
+            sidebar.classList.remove("no-transition");
+          });
+        }
+      } else {
+        // Ensure that if the sidebar wasn't open, the backdrop is removed.
+        const backdrop = document.querySelector(".sidebar-backdrop.active");
+        if (backdrop) {
+          backdrop.remove();
+        }
+        const dashboardContainer = document.querySelector(".dashboard-container");
+        if (dashboardContainer) {
+          dashboardContainer.classList.remove("sidebar-open");
+        }
       }
     } catch (error) {
       console.error("Ошибка при обновлении содержимого по хэшу:", error);
@@ -473,6 +522,44 @@ export async function renderDashboardPage() {
 
     setupDashboardHeaderEventListeners();
 
+    const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
+
+    if (sidebarToggleBtn) {
+      sidebarToggleBtn.addEventListener("click", () => {
+        const sidebar = document.querySelector(".dashboard-sidebar");
+        const dashboardContainer = document.querySelector(".dashboard-container");
+
+        if (sidebar && dashboardContainer) {
+          const isOpen = sidebar.classList.toggle("open");
+          dashboardContainer.classList.toggle("sidebar-open", isOpen);
+
+          let backdrop = document.querySelector(".sidebar-backdrop");
+          if (isOpen) {
+            if (!backdrop) {
+              backdrop = document.createElement("div");
+              backdrop.className = "sidebar-backdrop";
+              dashboardContainer.appendChild(backdrop);
+              backdrop.addEventListener("click", () => {
+                sidebarToggleBtn.click(); // Закрыть по клику на фон
+              });
+            }
+            // Даем время на добавление в DOM перед началом анимации
+            setTimeout(() => {
+              if (backdrop) backdrop.classList.add("active");
+            }, 10);
+          } else {
+            if (backdrop) {
+              backdrop.classList.remove("active");
+              // Удаляем элемент после завершения анимации
+              setTimeout(() => {
+                if (backdrop) backdrop.remove();
+              }, 300);
+            }
+          }
+        }
+      });
+    }
+
     setupDashboardHashChangeListener();
 
     await handleDashboardHashChange();
@@ -511,7 +598,6 @@ export async function renderDashboardPage() {
 }
 
 async function handleSidebarRefreshEvent(event) {
-
   await refreshDashboardSidebar();
 
   if (event.detail && event.detail.action === "deleted" && event.detail.navigateToDashboardHome) {

@@ -47,7 +47,8 @@ export function invalidateWorkspacesCache() {
 
 export async function renderDashboardSidebar(
   activeEntityId = null,
-  activeWorkspaceIdFromDashboard = null
+  activeWorkspaceIdFromDashboard = null,
+  isOpen = false
 ) {
   let activeEntityType = null;
 
@@ -324,7 +325,7 @@ export async function renderDashboardSidebar(
   }
 
   return `
-    <div class="dashboard-sidebar">
+    <div class="dashboard-sidebar ${isOpen ? "open no-transition" : ""}">
       <div class="sidebar-header">
         <div class="sidebar-title">Рабочие пространства</div>
       </div>

@@ -14,6 +14,9 @@ export function renderDashboardHeader() {
     <header class="dashboard-header">
       <div class="dashboard-header-container">
         <div class="dashboard-logo">
+          <button class="sidebar-toggle-btn" id="sidebarToggleBtn">
+            <i class="fas fa-bars"></i>
+          </button>
           <span class="dashboard-logo-text">ITConnect</span>
         </div>
         

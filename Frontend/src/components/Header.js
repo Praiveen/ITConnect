@@ -7,7 +7,7 @@ export function renderHeader() {
         <img src="/logo_ITConnect.png" class="logo" alt="ITConnect logo" />
         <span class="logo-text" id="home-link">ITConnect</span>
       </div>
-      <div class="auth-buttons">
+      <nav class="auth-buttons">
         ${
           authService.isAuthenticated()
             ? `<button class="btn-profile">Профиль</button>
@@ -15,15 +15,40 @@ export function renderHeader() {
             : `<button class="btn-login">Войти</button>
            <button class="btn-register">Зарегистрироваться</button>`
         }
+      </nav>
+      <div class="mobile-menu-icon">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="mobile-nav">
+        ${
+          authService.isAuthenticated()
+            ? `<a href="#" class="btn-profile">Профиль</a>
+               <a href="#" class="btn-logout">Выйти</a>`
+            : `<a href="#" class="btn-login">Войти</a>
+               <a href="#" class="btn-register">Зарегистрироваться</a>`
+        }
       </div>
     </header>
   `;
 }
 
 export function setupHeaderEventListeners() {
-  document.querySelector("#home-link").addEventListener("click", () => {
+  document.querySelector("#home-link").addEventListener("click", (e) => {
+    e.preventDefault();
     window.location.href = "/";
   });
+
+  const mobileMenuIcon = document.querySelector(".mobile-menu-icon");
+  const mobileNav = document.querySelector(".mobile-nav");
+
+  if (mobileMenuIcon) {
+    mobileMenuIcon.addEventListener("click", () => {
+      mobileMenuIcon.classList.toggle("active");
+      mobileNav.classList.toggle("active");
+    });
+  }
 
   document.querySelectorAll(".btn-login").forEach((button) => {
     button.addEventListener("click", () => {

@@ -17,7 +17,7 @@
     border-radius: 4px;
     box-shadow: -1px 1px 10px
         rgba(0, 0, 0, 0.3);
-    z-index: 1023;
+    /* z-index: 1023; */
     animation: slideInRight 0.3s
             ease-in-out forwards;
     transform: translateX(110%);

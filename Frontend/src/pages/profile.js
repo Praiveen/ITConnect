@@ -116,9 +116,10 @@ export async function renderProfilePage() {
               </div>
               <div class="form-group">
                 <label for="phoneNumber">Телефон</label>
-                <input type="text" id="phoneNumber" value="${
+                <input type="tel" id="phoneNumber" value="${
                   userData.phoneNumber || ""
                 }" placeholder="Введите номер телефона">
+                <small class="error-message" id="phoneNumberError" style="color: red; display: none;"></small>
               </div>
               <div class="form-group">
                 <label for="email">Email</label>
@@ -145,6 +146,32 @@ export async function renderProfilePage() {
     const editBtn = document.querySelector(".btn-edit-profile");
     const closeBtn = document.querySelector(".close-modal");
 
+    const phoneNumberInput = document.getElementById("phoneNumber");
+    const phoneNumberError = document.getElementById("phoneNumberError");
+    const submitFormButton = document.querySelector("#editProfileForm button[type=\"submit\"]");
+
+    function validatePhoneNumber(number) {
+      const phoneRegex = /^(\+7|8)\d{10}$/;
+      return phoneRegex.test(number);
+    }
+
+    phoneNumberInput.addEventListener("input", () => {
+      const phoneNumber = phoneNumberInput.value;
+      if (phoneNumber === "") {
+        phoneNumberError.style.display = "none";
+        phoneNumberError.textContent = "";
+        submitFormButton.disabled = false;
+      } else if (validatePhoneNumber(phoneNumber)) {
+        phoneNumberError.style.display = "none";
+        phoneNumberError.textContent = "";
+        submitFormButton.disabled = false;
+      } else {
+        phoneNumberError.textContent = "Неверный формат номера. Пример: +79001234567 или 89001234567";
+        phoneNumberError.style.display = "block";
+        submitFormButton.disabled = true;
+      }
+    });
+
     editBtn.addEventListener("click", () => {
       modal.style.display = "block";
     });
@@ -164,11 +191,19 @@ export async function renderProfilePage() {
       .addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const phoneNumber = phoneNumberInput.value;
+        if (phoneNumber !== "" && !validatePhoneNumber(phoneNumber)) {
+          phoneNumberError.textContent = "Неверный формат номера. Пример: +79001234567 или 89001234567";
+          phoneNumberError.style.display = "block";
+          submitFormButton.disabled = true;
+          return;
+        }
+
         const updatedProfile = {
           firstName: document.getElementById("firstName").value,
           lastName: document.getElementById("lastName").value,
           fullName: document.getElementById("fullName").value,
-          phoneNumber: document.getElementById("phoneNumber").value,
+          phoneNumber: phoneNumber,
           email: userData.email,
         };
 
@@ -212,7 +247,6 @@ function addModalStyles() {
       .modal {
         display: none;
         position: fixed;
-        z-index: 1000;
         left: 0;
         top: 0;
         width: 100%;
