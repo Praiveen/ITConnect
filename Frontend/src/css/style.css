@@ -1420,24 +1420,31 @@ button:focus-visible {
 }
 
 .card-drop-indicator {
-  height: 8px;
-  background-color: rgba(100, 100, 255, 0.7);
-  border-radius: 4px;
+  height: 6px;
+  background-color: #7c3aed;
   margin: 4px 0;
-  transition: all 0.2s;
-  flex-shrink: 0;
-  width: 100%;
+  border-radius: 3px;
+  animation: pulse 1.5s infinite;
+  position: relative;
+  /* z-index: 5; */
+  width: 95%;
+  margin-left: auto;
+  margin-right: auto;
   pointer-events: none;
+  box-shadow: 0 0 6px rgba(124, 58, 237, 0.5);
 }
 
 @keyframes pulse {
-  0%,
-  100% {
+  0% {
     opacity: 0.6;
   }
 
   50% {
     opacity: 1;
+  }
+
+  100% {
+    opacity: 0.6;
   }
 }
 
@@ -5482,7 +5489,6 @@ input[type="checkbox"]:focus {
   opacity: 0.8;
   transform: rotate(3deg);
   transition: none;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }
 
 .kanban-card.dragging-source {
@@ -5490,14 +5496,6 @@ input[type="checkbox"]:focus {
   background-color: #4a5568;
 }
 
-.kanban-column.dragging-source {
-  opacity: 0.4;
-}
-
 .kanban-card.user-assigned-pending {
   border-left: 4px solid #f59e0b; /* amber-500 */
-}
-
-.kanban-card.drag-over-bottom {
-  border-bottom: 2px solid #6366f1;
 }
