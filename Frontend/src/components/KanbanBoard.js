@@ -12,6 +12,19 @@ let boardChanged = false;
 let workspaceMembersCache = null;
 let currentWorkspaceIdForCache = null;
 
+let touchDraggingCard = null;
+let touchGhostCard = null;
+let initialTouchX = 0;
+let initialTouchY = 0;
+let lastDropZone = null;
+let isTouchDragging = false;
+
+let isTouchDraggingColumn = false;
+let touchDraggingColumn = null;
+let touchGhostColumn = null;
+let initialColumnTouchX = 0;
+let initialColumnTouchY = 0;
+
 function getChecklistStats(task) {
   let totalChecklistItems = 0;
   let completedChecklistItems = 0;
@@ -619,7 +632,7 @@ export async function renderKanbanBoard(
           ${
             !isViewOnly
               ? `
-          <button class="btn-secondary" id="editBoardButton">Архив карточек</button>
+          <button class="btn-secondary" id="editBoardButton"><i class="fas fa-archive"></i> <span>Архив карточек</span></button>
           `
               : ""
           }
@@ -879,6 +892,8 @@ function setupDragAndDrop() {
 
     card.addEventListener("dragover", handleDragOver);
     card.addEventListener("dragleave", handleDragLeave);
+
+    card.addEventListener("touchstart", handleTouchStart, { passive: false });
   });
 
   dropZones.forEach((zone) => {
@@ -2222,6 +2237,9 @@ function setupColumnDragAndDrop() {
       columnHeader.setAttribute("draggable", "true");
       columnHeader.addEventListener("dragstart", handleColumnDragStart);
       columnHeader.addEventListener("dragend", handleColumnDragEnd);
+      columnHeader.addEventListener("touchstart", handleColumnTouchStart, {
+        passive: false,
+      });
     }
   });
 
@@ -5174,4 +5192,256 @@ function filterKanbanCards(query) {
       }
     });
   });
+}
+
+function handleTouchStart(e) {
+  const card = e.currentTarget;
+  if (card.closest('[data-view-only="true"]')) return;
+  if (e.target.closest(".card-actions, .card-checkbox")) return;
+
+  if (e.touches.length === 1) {
+    e.preventDefault();
+    isTouchDragging = true;
+    touchDraggingCard = card;
+
+    const touch = e.touches[0];
+    initialTouchX = touch.clientX;
+    initialTouchY = touch.clientY;
+
+    const rect = card.getBoundingClientRect();
+
+    touchGhostCard = card.cloneNode(true);
+    touchGhostCard.classList.add("dragging", "ghost");
+    document.body.appendChild(touchGhostCard);
+
+    touchGhostCard.style.left = `${rect.left}px`;
+    touchGhostCard.style.top = `${rect.top}px`;
+    touchGhostCard.style.width = `${rect.width}px`;
+    touchGhostCard.style.height = `${rect.height}px`;
+
+    card.classList.add("dragging-source");
+
+    document.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+    });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+    document.addEventListener("touchcancel", handleTouchEnd, {
+      passive: false,
+    });
+  }
+}
+
+function handleTouchMove(e) {
+  if (!isTouchDragging || !touchDraggingCard) return;
+
+  e.preventDefault();
+
+  const touch = e.touches[0];
+
+  touchGhostCard.style.transform = `translate(${
+    touch.clientX - initialTouchX
+  }px, ${touch.clientY - initialTouchY}px)`;
+
+  touchGhostCard.style.display = "none";
+  const elementUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+  touchGhostCard.style.display = "";
+
+  if (!elementUnder) return;
+
+  const dropZone = elementUnder.closest(".column-cards");
+
+  document
+    .querySelectorAll(".column-cards.drag-over")
+    .forEach((el) => el.classList.remove("drag-over"));
+  document
+    .querySelectorAll(".card-drop-indicator")
+    .forEach((el) => el.remove());
+
+  lastDropZone = dropZone;
+
+  if (dropZone) {
+    dropZone.classList.add("drag-over");
+
+    const cardUnder = elementUnder.closest(
+      ".kanban-card:not(.dragging-source)"
+    );
+    const indicator = document.createElement("div");
+    indicator.className = "card-drop-indicator";
+
+    if (cardUnder) {
+      const cardRect = cardUnder.getBoundingClientRect();
+      const isBottomHalf = touch.clientY > cardRect.top + cardRect.height / 2;
+
+      if (isBottomHalf) {
+        cardUnder.after(indicator);
+      } else {
+        cardUnder.before(indicator);
+      }
+    } else if (
+      !dropZone.querySelector(".kanban-card:not(.dragging-source)")
+    ) {
+      dropZone.appendChild(indicator);
+    }
+  }
+}
+
+function handleTouchEnd(e) {
+  if (!isTouchDragging || !touchDraggingCard) return;
+
+  e.preventDefault();
+  isTouchDragging = false;
+
+  const dropIndicator = document.querySelector(".card-drop-indicator");
+  const dropZone = dropIndicator ? dropIndicator.closest(".column-cards") : null;
+
+  if (dropZone && dropIndicator) {
+    const taskId = touchDraggingCard.dataset.taskId;
+    const sourceColumnId =
+      touchDraggingCard.closest(".kanban-column").dataset.columnId;
+    const targetColumnId = dropZone.dataset.columnId;
+
+    dropIndicator.parentNode.insertBefore(touchDraggingCard, dropIndicator);
+
+    if (sourceColumnId !== targetColumnId) {
+      const boardData = JSON.parse(currentBoardData.boardData);
+      const sourceColumn = boardData.columns.find(
+        (c) => c.id === sourceColumnId
+      );
+      const targetColumn = boardData.columns.find(
+        (c) => c.id === targetColumnId
+      );
+      if (sourceColumn && targetColumn) {
+        const taskIndex = sourceColumn.tasks.findIndex((t) => t.id === taskId);
+        if (taskIndex > -1) {
+          const [task] = sourceColumn.tasks.splice(taskIndex, 1);
+          targetColumn.tasks.push(task);
+          currentBoardData.boardData = JSON.stringify(boardData);
+        }
+      }
+    }
+    updateCardOrderInColumn(targetColumnId);
+  }
+
+  if (touchGhostCard && touchGhostCard.parentNode) {
+    document.body.removeChild(touchGhostCard);
+  }
+  if (touchDraggingCard) {
+    touchDraggingCard.classList.remove("dragging-source");
+  }
+  document
+    .querySelectorAll(".drag-over")
+    .forEach((el) => el.classList.remove("drag-over"));
+  document
+    .querySelectorAll(".card-drop-indicator")
+    .forEach((el) => el.remove());
+
+  touchDraggingCard = null;
+  touchGhostCard = null;
+  lastDropZone = null;
+
+  document.removeEventListener("touchmove", handleTouchMove);
+  document.removeEventListener("touchend", handleTouchEnd);
+  document.removeEventListener("touchcancel", handleTouchEnd);
+}
+
+function handleColumnTouchStart(e) {
+  const columnHeader = e.currentTarget;
+  const column = columnHeader.closest(".kanban-column");
+  if (!column || column.closest('[data-view-only="true"]')) return;
+
+  if (e.touches.length === 1) {
+    e.preventDefault();
+    isTouchDraggingColumn = true;
+    touchDraggingColumn = column;
+
+    const touch = e.touches[0];
+    const rect = column.getBoundingClientRect();
+    initialColumnTouchX = touch.clientX;
+    initialColumnTouchY = touch.clientY;
+
+    touchGhostColumn = column.cloneNode(true);
+    touchGhostColumn.classList.add("ghost");
+    touchGhostColumn.style.width = `${rect.width}px`;
+    touchGhostColumn.style.height = `${rect.height}px`;
+    document.body.appendChild(touchGhostColumn);
+
+    touchGhostColumn.style.left = `${rect.left}px`;
+    touchGhostColumn.style.top = `${rect.top}px`;
+
+    column.classList.add("dragging-source");
+
+    document.addEventListener("touchmove", handleColumnTouchMove, {
+      passive: false,
+    });
+    document.addEventListener("touchend", handleColumnTouchEnd, {
+      passive: false,
+    });
+    document.addEventListener("touchcancel", handleColumnTouchEnd, {
+      passive: false,
+    });
+  }
+}
+
+function handleColumnTouchMove(e) {
+  if (!isTouchDraggingColumn || !touchGhostColumn) return;
+  e.preventDefault();
+
+  const touch = e.touches[0];
+  const dx = touch.clientX - initialColumnTouchX;
+  const dy = touch.clientY - initialColumnTouchY;
+  touchGhostColumn.style.transform = `translate(${dx}px, ${dy}px)`;
+
+  touchGhostColumn.style.display = "none";
+  const elementUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+  touchGhostColumn.style.display = "";
+
+  document
+    .querySelectorAll(".column-drop-indicator")
+    .forEach((el) => el.remove());
+
+  if (elementUnder) {
+    const closestColumn = elementUnder.closest(
+      ".kanban-column:not(.dragging-source)"
+    );
+    if (closestColumn) {
+      const rect = closestColumn.getBoundingClientRect();
+      const isLeftHalf = touch.clientX < rect.left + rect.width / 2;
+      const indicator = document.createElement("div");
+      indicator.className = "column-drop-indicator";
+      if (isLeftHalf) {
+        closestColumn.before(indicator);
+      } else {
+        closestColumn.after(indicator);
+      }
+    }
+  }
+}
+
+function handleColumnTouchEnd(e) {
+  if (!isTouchDraggingColumn || !touchDraggingColumn) return;
+  e.preventDefault();
+
+  const indicator = document.querySelector(".column-drop-indicator");
+  if (indicator) {
+    indicator.parentNode.insertBefore(touchDraggingColumn, indicator);
+    updateColumnsOrder();
+  }
+
+  if (touchGhostColumn && touchGhostColumn.parentNode) {
+    document.body.removeChild(touchGhostColumn);
+  }
+  if (touchDraggingColumn) {
+    touchDraggingColumn.classList.remove("dragging-source");
+  }
+  document
+    .querySelectorAll(".column-drop-indicator")
+    .forEach((el) => el.remove());
+
+  isTouchDraggingColumn = false;
+  touchDraggingColumn = null;
+  touchGhostColumn = null;
+
+  document.removeEventListener("touchmove", handleColumnTouchMove);
+  document.removeEventListener("touchend", handleColumnTouchEnd);
+  document.removeEventListener("touchcancel", handleColumnTouchEnd);
 }
