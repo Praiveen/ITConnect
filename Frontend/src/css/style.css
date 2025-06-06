@@ -549,7 +549,7 @@ button:focus-visible {
   top: 0;
   left: 0;
   right: 0;
-  /* z-index: 1000; */
+  z-index: 10;
   height: 50px;
 }
 
@@ -2749,6 +2749,7 @@ body.light-mode .workspace-empty {
 .modal-overlay.active {
   opacity: 1;
   visibility: visible;
+  z-index: 1000;
 }
 
 .modal-container {
@@ -4050,9 +4051,9 @@ input[type="checkbox"]:focus {
 }
 
 .sidebar-btn.add-checklist-btn {
-  display: flex;
+  /* display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px; */
 }
 
 .sidebar-btn.add-checklist-btn i {
@@ -4333,13 +4334,9 @@ input[type="checkbox"]:focus {
 }
 
 .sidebar-btn.add-checklist-btn {
-  display: flex;
+  /* display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.sidebar-btn.add-checklist-btn i {
-  font-size: 14px;
+  gap: 8px; */
 }
 
 .mentions-dropdown {
@@ -4533,7 +4530,7 @@ input[type="checkbox"]:focus {
   border: 1px solid #444454;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  /* z-index: 10; */
+  z-index: 10;
   min-width: 150px;
   max-height: 150px;
   overflow-y: auto;
@@ -5385,6 +5382,70 @@ input[type="checkbox"]:focus {
     content: '!';
     font-size: 20px;
     font-weight: bold;
+  }
+
+  /* Card Detail Modal */
+  .card-detail-modal .modal-body {
+    flex-direction: column-reverse;
+    overflow-y: auto;
+    padding-bottom: 1rem;
+  }
+
+  .card-modal-header {
+    padding: 1rem;
+  }
+
+  .card-modal-sidebar {
+    width: 40px;
+    flex-shrink: 1;
+    padding-left: 7px;
+  }
+
+  .card-modal-sidebar .sidebar-section > .sidebar-title,
+  .card-modal-sidebar .sidebar-section:last-child {
+    display: none;
+  }
+
+  .card-modal-title {
+    word-break: break-word;
+    font-size: 1.25rem;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .sidebar-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .sidebar-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 44px;
+  }
+
+  .sidebar-btn-text,
+  .task-label {
+    display: none;
+  }
+
+  .task-completion-toggle {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 44px;
+  }
+
+
+  .card-modal-title.card-title-editable{
+    min-width: 100px;
+  }
+
+  .card-modal-body{
+    gap: 10px;
+  }
+  .task-completion-toggle{
+    margin-bottom: 10px;
   }
 }
 

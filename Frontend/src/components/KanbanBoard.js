@@ -2902,10 +2902,10 @@ function openCardDetailModal(taskId, options = {}) {
                   }" data-task-id="${taskId}"></div>
                   <span class="task-label">Отметить как выполненное</span>
                 </div>
-                <button class="sidebar-btn add-checklist-btn" data-task-id="${taskId}"><i class="fas fa-tasks"></i> Добавить чек-лист</button>
-                <button class="sidebar-btn set-card-due-date-btn" data-task-id="${taskId}"><i class="fas fa-calendar-alt"></i> Установить дату</button>
-                <button class="sidebar-btn archive-card-btn" data-task-id="${taskId}"><i class="fas fa-archive"></i> Архивировать</button>
-                <button class="sidebar-btn delete-card-btn" data-task-id="${taskId}">🗑️ Удалить карточку</button>
+                <button class="sidebar-btn add-checklist-btn" data-task-id="${taskId}"><i class="fas fa-tasks"></i><span class="sidebar-btn-text"> Добавить чек-лист</span></button>
+                <button class="sidebar-btn set-card-due-date-btn" data-task-id="${taskId}"><i class="fas fa-calendar-alt"></i><span class="sidebar-btn-text"> Установить дату</span></button>
+                <button class="sidebar-btn archive-card-btn" data-task-id="${taskId}"><i class="fas fa-archive"></i><span class="sidebar-btn-text"> Архивировать</span></button>
+                <button class="sidebar-btn delete-card-btn" data-task-id="${taskId}"><i class="fas fa-trash"></i><span class="sidebar-btn-text"> Удалить карточку</span></button>
               </div>
             </div>
             <div class="sidebar-section">
