@@ -3501,7 +3501,7 @@ export async function openCardDetailModal(taskId, options = {}) {
       const modalContainer = modalOverlay.querySelector(".card-detail-modal");
       if (modalContainer) {
         modalContainer.addEventListener(
-          "mousedown",
+          "click",
           (e) => {
             if (e.target.closest(".card-modal-close")) {
               return;
@@ -3524,31 +3524,6 @@ export async function openCardDetailModal(taskId, options = {}) {
           showWarningToast("Редактирование архивированной карточки запрещено");
           if (typeof e.target.blur === "function") e.target.blur();
         });
-
-        const titleElement = modalContainer.querySelector(
-          ".card-title-editable"
-        );
-        if (titleElement) {
-          titleElement.addEventListener("click", (e) => {
-            showWarningToast(
-              "Редактирование архивированной карточки запрещено"
-            );
-            e.stopPropagation();
-            e.preventDefault();
-          });
-        }
-        const descElement = modalContainer.querySelector(
-          ".card-description-editable"
-        );
-        if (descElement) {
-          descElement.addEventListener("click", (e) => {
-            showWarningToast(
-              "Редактирование архивированной карточки запрещено"
-            );
-            e.stopPropagation();
-            e.preventDefault();
-          });
-        }
       }
     }
   } catch (error) {
