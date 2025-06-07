@@ -6,10 +6,14 @@ import com.itconnect.backend.entities.Workspace;
 import com.itconnect.backend.repositories.NotificationRepository;
 import com.itconnect.backend.repositories.UserRepository;
 import com.itconnect.backend.repositories.WorkspaceRepository;
+import com.itconnect.backend.repositories.KanbanRepository;
+import com.itconnect.backend.dto.request.MentionNotificationRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,15 +26,18 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
+    private final KanbanRepository kanbanRepository;
     
     @Autowired
     public NotificationService(
             NotificationRepository notificationRepository,
             UserRepository userRepository,
-            WorkspaceRepository workspaceRepository) {
+            WorkspaceRepository workspaceRepository,
+            KanbanRepository kanbanRepository) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
+        this.kanbanRepository = kanbanRepository;
     }
     
     /**
@@ -269,12 +276,37 @@ public class NotificationService {
         Optional<Notification> notificationOpt = notificationRepository.findById(id);
         if (notificationOpt.isPresent()) {
             Notification notification = notificationOpt.get();
-            // Проверяем, что уведомление принадлежит данному пользователю
             if (notification.getReceiver().getUserId().equals(user.getUserId())) {
                 notificationRepository.delete(notification);
                 return true;
             }
         }
         return false;
+    }
+
+    @Transactional
+    public void createMentionNotifications(MentionNotificationRequest request, User sender) {
+        kanbanRepository.findById(request.getBoardId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kanban board not found"));
+
+        List<Long> mentionedUserIds = request.getMentionedUserIds();
+        Iterable<User> receivers = userRepository.findAllById(mentionedUserIds.stream().map(Long::intValue).collect(Collectors.toList()));
+
+        for (User receiver : receivers) {
+            if (receiver.getUserId().equals(sender.getUserId())) {
+                continue;
+            }
+
+            String message = String.format("%s упомянул(а) вас в карточке '%s'",
+                    sender.getFirstName(), request.getCardTitle());
+
+            createNotification(
+                    message,
+                    Notification.TYPE_MENTION,
+                    sender,
+                    receiver,
+                    Notification.REF_TYPE_KANBAN,
+                    request.getBoardId());
+        }
     }
 } 

@@ -1,11 +1,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 function getApiUrl(path) {
-  // path должен начинаться с /
   if (API_BASE_URL) {
     return API_BASE_URL + path;
   }
-  // Если переменная не задана (локальная разработка) — используем прокси
   return '/api' + path;
 }
 

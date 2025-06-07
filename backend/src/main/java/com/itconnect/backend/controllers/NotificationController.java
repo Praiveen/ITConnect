@@ -7,13 +7,14 @@ import com.itconnect.backend.entities.User;
 import com.itconnect.backend.services.NotificationService;
 import com.itconnect.backend.services.UserService;
 import com.itconnect.backend.services.WorkspaceService;
-
+import com.itconnect.backend.dto.request.MentionNotificationRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -160,6 +161,17 @@ public class NotificationController {
 
         notificationService.markAllAsRead(currentUser);
         return ResponseEntity.ok(new ResponseDto("Все уведомления отмечены как прочитанные", true));
+    }
+
+    @PostMapping("/mention")
+    public ResponseEntity<?> createMentionNotification(@RequestBody MentionNotificationRequest request) {
+        User currentUser = getCurrentUser();
+        if (currentUser == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ResponseDto("Пользователь не авторизован", false));
+        }
+        notificationService.createMentionNotifications(request, currentUser);
+        return ResponseEntity.ok(new ResponseDto("Уведомления об упоминании созданы", true));
     }
 
     /**

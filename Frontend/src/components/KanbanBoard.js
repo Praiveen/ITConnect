@@ -3,6 +3,7 @@ import { getBoardsCache, updateBoardsCache } from "./DashboardSidebar.js";
 import { authService } from "../services/auth-service.js";
 import { workspaceService } from "../services/workspace-service.js";
 import { showWarningToast } from "./Alert.js";
+import { notificationService } from "../services/notification-service.js";
 
 let saveTimer = null;
 const SAVE_DELAY = 15000;
@@ -271,11 +272,30 @@ document.addEventListener("click", function (event) {
   }
 });
 
-function formatTextWithMentions(text) {
+function extractMentionedUsernames(text) {
+  if (!text) return [];
+  const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
+  const mentions = new Set();
+  let match;
+  while ((match = mentionRegex.exec(text)) !== null) {
+    mentions.add(match[1]);
+  }
+  return Array.from(mentions);
+}
+
+function formatTextWithMentions(text, users = []) {
   if (!text) return "";
 
+  const userSet = new Set(users.map((u) => u.username.toLowerCase()));
+
   const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
-  return text.replace(mentionRegex, '<span class="mention-tag">@$1</span>');
+
+  return text.replace(mentionRegex, (match, username) => {
+    if (userSet.has(username.toLowerCase())) {
+      return `<span class="mention-tag">${match}</span>`;
+    }
+    return match;
+  });
 }
 
 function getCardUserTaskStatus(task, currentUserIdString) {
@@ -2735,8 +2755,9 @@ function setupColumnEventListeners(columnElement) {
   });
 }
 
-function openCardDetailModal(taskId, options = {}) {
+export async function openCardDetailModal(taskId, options = {}) {
   try {
+    const mentionableUsers = await getMentionableUsers("");
     const boardData = JSON.parse(currentBoardData.boardData);
 
     let foundTask = null;
@@ -2812,7 +2833,8 @@ function openCardDetailModal(taskId, options = {}) {
             <div class="card-detail-section">
               <div class="card-detail-label">Описание</div>
               <div class="card-detail-value card-description-editable" data-task-id="${taskId}">${formatTextWithMentions(
-      foundTask.description || "Добавить более подробное описание..."
+      foundTask.description || "Добавить более подробное описание...",
+      mentionableUsers
     )}</div>
             </div>
 
@@ -2869,7 +2891,8 @@ function openCardDetailModal(taskId, options = {}) {
                           ).toLocaleString("ru-RU")}</span>
                         </div>
                         <div class="comment-text">${formatTextWithMentions(
-                          comment.text
+                          comment.text,
+                          mentionableUsers
                         )}</div>
                         <div class="comment-actions">
                           ${
@@ -3023,10 +3046,10 @@ function openCardDetailModal(taskId, options = {}) {
       const editSessionId = "edit_" + Date.now();
       this.setAttribute("data-edit-session", editSessionId);
 
-      const currentDescription =
-        this.textContent === "Добавить более подробное описание..."
-          ? ""
-          : this.textContent;
+      const boardDataOnClick = JSON.parse(currentBoardData.boardData);
+      const taskOnClick = findTaskById(boardDataOnClick, taskId);
+      const currentDescription = taskOnClick.description || "";
+
       const textarea = document.createElement("textarea");
       textarea.value = currentDescription;
       textarea.className = "card-description-textarea-inline";
@@ -3066,46 +3089,47 @@ function openCardDetailModal(taskId, options = {}) {
 
         const newDescription = textarea.value.trim();
 
-        this.innerHTML = "";
-
         this.removeAttribute("data-edit-session");
 
         const boardData = JSON.parse(currentBoardData.boardData);
         for (const column of boardData.columns) {
           const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
           if (taskIndex !== -1) {
+            const oldDescription = column.tasks[taskIndex].description || "";
             column.tasks[taskIndex].description = newDescription;
             column.tasks[taskIndex].updatedAt = new Date().toISOString();
 
             this.innerHTML = formatTextWithMentions(
-              newDescription || "Добавить более подробное описание..."
+              newDescription || "Добавить более подробное описание...",
+              mentionableUsers
             );
 
-            const cardElement = document.querySelector(
-              `.kanban-card[data-task-id="${taskId}"] .card-description`
+            const oldUsernames = extractMentionedUsernames(oldDescription);
+            const newUsernames = extractMentionedUsernames(newDescription);
+            const newlyMentioned = newUsernames.filter(
+              (u) => !oldUsernames.includes(u)
             );
-            if (cardElement) {
-              if (newDescription) {
-                if (cardElement) {
-                  cardElement.textContent = newDescription;
-                } else {
-                  const cardContent = document.querySelector(
-                    `.kanban-card[data-task-id="${taskId}"] .card-content`
-                  );
-                  if (cardContent) {
-                    const descElement = document.createElement("div");
-                    descElement.className = "card-description";
-                    descElement.textContent = newDescription;
-                    cardContent.appendChild(descElement);
-                  }
-                }
-              } else if (cardElement) {
-                cardElement.remove();
+
+            if (newlyMentioned.length > 0) {
+              const currentUser = authService.getUser();
+              const mentionedUsers = mentionableUsers.filter(
+                (u) =>
+                  newlyMentioned.includes(u.username) &&
+                  (!currentUser || String(u.id) !== String(currentUser.id))
+              );
+
+              if (mentionedUsers.length > 0) {
+                notificationService.createMentionNotification({
+                  mentionedUserIds: mentionedUsers.map((u) => u.id),
+                  boardId: currentBoardData.id,
+                  taskId: taskId,
+                  cardTitle: column.tasks[taskIndex].title,
+                  componentType: "description",
+                });
               }
             }
 
             updateBoardData(boardData);
-
             updateCardIndicators(taskId);
             break;
           }
@@ -3237,6 +3261,24 @@ function openCardDetailModal(taskId, options = {}) {
             column.tasks[taskIndex].comments.push(newComment);
             column.tasks[taskIndex].updatedAt = new Date().toISOString();
 
+            const mentionedUsernames = extractMentionedUsernames(commentText);
+            if (mentionedUsernames.length > 0) {
+              const mentionedUsers = mentionableUsers.filter(
+                (u) =>
+                  mentionedUsernames.includes(u.username) &&
+                  (!currentUser || String(u.id) !== String(currentUser.id))
+              );
+              if (mentionedUsers.length > 0) {
+                notificationService.createMentionNotification({
+                  mentionedUserIds: mentionedUsers.map((u) => u.id),
+                  boardId: currentBoardData.id,
+                  taskId: taskId,
+                  cardTitle: foundTask.title,
+                  componentType: "comment",
+                });
+              }
+            }
+
             const commentsContainer = modalOverlay.querySelector(
               ".card-comments-container"
             );
@@ -3262,7 +3304,8 @@ function openCardDetailModal(taskId, options = {}) {
                   ).toLocaleString("ru-RU")}</span>
                 </div>
                 <div class="comment-text">${formatTextWithMentions(
-                  newComment.text
+                  newComment.text,
+                  mentionableUsers
                 )}</div>
                 <div class="comment-actions">
                   <button class="comment-edit-btn" data-comment-id="${
@@ -3286,7 +3329,7 @@ function openCardDetailModal(taskId, options = {}) {
             );
 
             editBtn.addEventListener("click", () => {
-              editComment(taskId, newComment.id, commentElement);
+              editComment(taskId, newComment.id, commentElement, mentionableUsers);
             });
 
             deleteBtn.addEventListener("click", () => {
@@ -3320,7 +3363,7 @@ function openCardDetailModal(taskId, options = {}) {
         const commentElement = modalOverlay.querySelector(
           `.card-comment[data-comment-id="${commentId}"]`
         );
-        editComment(taskId, commentId, commentElement);
+        editComment(taskId, commentId, commentElement, mentionableUsers);
       });
     });
 
@@ -3514,7 +3557,7 @@ function openCardDetailModal(taskId, options = {}) {
   }
 }
 
-function editComment(taskId, commentId, commentElement) {
+function editComment(taskId, commentId, commentElement, users = []) {
   try {
     const commentTextElement = commentElement.querySelector(".comment-text");
 
@@ -3555,6 +3598,32 @@ function editComment(taskId, commentId, commentElement) {
       const newText = textarea.value.trim();
       if (!newText) return;
 
+      const oldUsernames = extractMentionedUsernames(rawText);
+      const newUsernames = extractMentionedUsernames(newText);
+      const newlyMentioned = newUsernames.filter(
+        (u) => !oldUsernames.includes(u)
+      );
+
+      if (newlyMentioned.length > 0) {
+        const currentUser = authService.getUser();
+        const mentionedUsers = users.filter(
+          (u) =>
+            newlyMentioned.includes(u.username) &&
+            (!currentUser || String(u.id) !== String(currentUser.id))
+        );
+        if (mentionedUsers.length > 0) {
+          const boardData = JSON.parse(currentBoardData.boardData);
+          const task = findTaskById(boardData, taskId);
+          notificationService.createMentionNotification({
+            mentionedUserIds: mentionedUsers.map((u) => u.id),
+            boardId: currentBoardData.id,
+            taskId: taskId,
+            cardTitle: task.title,
+            componentType: "comment",
+          });
+        }
+      }
+
       const boardData = JSON.parse(currentBoardData.boardData);
       for (const column of boardData.columns) {
         const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
@@ -3567,7 +3636,7 @@ function editComment(taskId, commentId, commentElement) {
             column.tasks[taskIndex].comments[commentIndex].updatedAt =
               new Date().toISOString();
 
-            commentTextElement.innerHTML = formatTextWithMentions(newText);
+            commentTextElement.innerHTML = formatTextWithMentions(newText, users);
 
             updateBoardData(boardData);
             break;
@@ -3577,7 +3646,7 @@ function editComment(taskId, commentId, commentElement) {
     });
 
     cancelBtn.addEventListener("click", () => {
-      commentTextElement.innerHTML = formatTextWithMentions(rawText);
+      commentTextElement.innerHTML = formatTextWithMentions(rawText, users);
     });
 
     textarea.addEventListener("keydown", (e) => {

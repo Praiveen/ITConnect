@@ -374,6 +374,26 @@ class NotificationService {
       throw error;
     }
   }
+
+  async createMentionNotification(data) {
+    try {
+      const response = await fetch(getApiUrl("/notifications/mention"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "Ошибка при создании уведомления об упоминании"
+        );
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Ошибка при создании уведомления об упоминании:", error);
+    }
+  }
 }
 
 export const notificationService = new NotificationService();

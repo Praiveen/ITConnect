@@ -1937,7 +1937,7 @@ body.light-mode .workspace-empty {
 }
 
 .notifications-dropdown {
-  width: 320px;
+  width: 280px;
   right: 60px;
   max-height: 400px;
   overflow-y: auto;
@@ -4345,7 +4345,7 @@ input[type="checkbox"]:focus {
   border: 1px solid #444454;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  /* z-index: 100; */
+  z-index: 1100; /* Increased z-index to appear above modal */
   max-height: 200px;
   overflow-y: auto;
   display: none;

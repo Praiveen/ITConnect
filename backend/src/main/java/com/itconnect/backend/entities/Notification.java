@@ -71,6 +71,7 @@ public class Notification {
     public static final String TYPE_TASK_ASSIGNED = "TASK_ASSIGNED";
     public static final String TYPE_COMMENT_ADDED = "COMMENT_ADDED";
     public static final String TYPE_BOARD_SHARED = "BOARD_SHARED";
+    public static final String TYPE_MENTION = "MENTION";
 
     public static final String REF_TYPE_WORKSPACE = "WORKSPACE";
     public static final String REF_TYPE_KANBAN = "KANBAN";
